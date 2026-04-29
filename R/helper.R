@@ -42,8 +42,8 @@ evaluate_estimates <- function(train_true,
                                train_pred,
                                test_true,
                                test_pred,
-                               X = NULL, # for rank computation
-                               Z = NULL, # for rank computation
+                               beta = NULL, # for rank computation
+                               gamma = NULL, # for rank computation
                                M = NULL, # for rank computation
                                model = "",
                                time = -1,
@@ -61,7 +61,7 @@ evaluate_estimates <- function(train_true,
   ) %>%
     round(digits) %>%
     mutate(time = time, model = model,
-           rank_x = ifelse(! is.null(X) && is.matrix(X), qr(X)$rank, NA),
-           rank_z = ifelse(! is.null(Z) && is.matrix(Z), qr(Z)$rank, NA),
+           rank_beta = ifelse(! is.null(beta) && is.matrix(beta), qr(beta)$rank, NA),
+           rank_gamma = ifelse(! is.null(gamma) && is.matrix(gamma), qr(gamma)$rank, NA),
            rank_m = ifelse(! is.null(M) && is.matrix(M), qr(M)$rank, NA))
 }
