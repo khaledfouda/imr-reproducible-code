@@ -21,7 +21,7 @@ convergence <- IMR::imr_convergence(maxit=1000, thresh=1e-6)
 grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta = 0, nuclear = c(0,40,40,2))
 print(grid)
 
-for(b in 1:500){
+for(b in 1:1){
   seed = 2025 + b
   set.seed(seed)
   for(d in dims){
@@ -159,7 +159,7 @@ r = 5;
 missing_pct = seq(.7, .98, .05)
 all_res <- res <- data.frame()
 # b = 1; pct=1
-for(b in 1:500){
+for(b in 1:250){
   seed = 2025 + b
   start1 = Sys.time()
   set.seed(seed)
@@ -263,7 +263,7 @@ for(b in 1:500){
 # Setting 2 - part 2 (to generate Figure 2) 
 # Models: SImpute and IMR
 #============================================================
-results_scenario2_part_1 <- rw_a_file("results_scenario_2_part_1_backup.rds",
+results_scenario2_part_1 <- rw_a_file("results_scenario_2_part_1.rds",
                                       directory = "./data/Simulation/",
                                       type = "read"
 )
@@ -271,16 +271,16 @@ results_scenario2_part_1 <- rw_a_file("results_scenario_2_part_1_backup.rds",
 # extract hyperparameters: choose the median of overall
 results_scenario2_part_1 %>%
   filter(model == "IMR") %>%
-  dplyr::select(lambda_laplace, rank_m, miss_pct) %>%
-  mutate(miss_pct = round(miss_pct, 2)) %>%
+  dplyr::select(lambda_m, rank_m, missing_pct) %>%
+  mutate(missing_pct = round(missing_pct, 2)) %>%
   summarise_all(median) %>%
   mutate(rank_m = round(rank_m)) %>%
   ungroup() -> best_hparams
 
 results_scenario2_part_1 %>%
   filter(model == "SI") %>%
-  dplyr::select(rank, miss_pct, lambda_laplace) %>%
-  mutate(miss_pct = round(miss_pct, 2)) %>%
+  dplyr::select(rank, missing_pct, lambda_m) %>%
+  mutate(missing_pct = round(missing_pct, 2)) %>%
   summarise_all(median) %>%
   round() -> simpute_rank
 #----------------------------------------------------------------
@@ -311,7 +311,7 @@ for(b in 1:500){
     start = Sys.time()
     fitsi <- softImpute::softImpute(dat$Y,
                                     rank.max = simpute_rank$rank,
-                                    lambda = simpute_rank$lambda_laplace,
+                                    lambda = simpute_rank$lambda_m,
                                     thresh = convergence$thresh,
                                     maxit = convergence$maxit,
                                     trace.it = FALSE,final.svd = TRUE, type = "als")
@@ -319,7 +319,7 @@ for(b in 1:500){
     
     start = Sys.time()
     fitimr <- IMR::imr_fit(mdat, rank = best_hparams$rank_m,
-                           lambda_m = best_hparams$lambda_laplace,
+                           lambda_m = best_hparams$lambda_m,
                            convergence=convergence)
     time.imr = as.numeric(Sys.time() -  start, units = "secs")
     
@@ -373,7 +373,7 @@ for(b in 1:500){
     group_by(model, missing_pct) %>%
     summarize_all(c(m=mean,s=sd)) %>%
     as.data.frame() %>%
-    select(model, missing_pct, test_rrmse_m, test_rrmse_s, rank_m) %>%
+    select(model, missing_pct, test_rrmse_m, test_rrmse_s, rank_m, time_m) %>%
     arrange(missing_pct, test_rrmse_m) %>%
     print()
   
