@@ -4,7 +4,7 @@
 .Ruserdata
 *.rds
 *.dat
-R/movielens/*
 !*results_bktr.rds
 !*results_imr.rds
 !data/Simulation/*
+/R/movielens/.ipynb_checkpoints
