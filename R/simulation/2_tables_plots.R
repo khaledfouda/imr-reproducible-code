@@ -66,7 +66,7 @@ wide <- sim1.tab %>%
   mutate(metric = recode(metric, !!!metric_labels)) %>%
   mutate(model = factor(model, levels = method_order)) %>%
   arrange(dim, model) %>%
-  select(dim, model, metric, value) %>%
+  dplyr::select(dim, model, metric, value) %>%
   pivot_wider(names_from = metric, values_from = value) %>%
   as.data.frame()
 

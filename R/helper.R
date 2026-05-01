@@ -37,6 +37,12 @@ rw_a_file <- function(filename,
   }
 }
 #-----------------
+comp_rank <- function(x){
+  if(100 < min(dim(x)/2)){
+    return(sum(irlba::irlba(x, nv=100)$d > 1e-5 ))
+  }else
+    return(qr(x)$rank)
+}
 
 evaluate_estimates <- function(train_true,
                                train_pred,
@@ -61,7 +67,9 @@ evaluate_estimates <- function(train_true,
   ) %>%
     round(digits) %>%
     mutate(time = time, model = model,
-           rank_beta = ifelse(! is.null(beta) && is.matrix(beta), qr(beta)$rank, NA),
-           rank_gamma = ifelse(! is.null(gamma) && is.matrix(gamma), qr(gamma)$rank, NA),
-           rank_m = ifelse(! is.null(M) && is.matrix(M), qr(M)$rank, NA))
+           rank_beta = ifelse(! is.null(beta) && is.matrix(beta), comp_rank(beta), NA),
+           rank_gamma = ifelse(! is.null(gamma) && is.matrix(gamma), comp_rank(gamma), NA),
+           sparse_beta = ifelse(! is.null(beta) && is.matrix(beta), mean(beta==0), NA),
+           sparse_gamma = ifelse(! is.null(gamma) && is.matrix(gamma), mean(gamma==0), NA),
+           rank_m = ifelse(! is.null(M) && is.matrix(M), comp_rank(M), NA))
 }
