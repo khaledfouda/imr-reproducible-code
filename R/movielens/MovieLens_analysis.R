@@ -110,22 +110,22 @@ res %>%
   ) ->
   res_df
 
-# 1- results table:
-res_df <- do.call(rbind, lapply(res, function(x) if (length(x) == 14) x[c(1:2, 5:12)] else x)) |>
-  as.data.frame() |>
-  dplyr::mutate(
-    dplyr::across(
-      c(time, error.test, corr.test, error.train, sparsity_beta, sparsity_gamma, rank_M, rank_beta, rank_gamma),
-      as.numeric
-    )
-  ) |>
-  dplyr::mutate(dplyr::across(tidyselect::where(is.numeric), ~ round(.x, 3))) |>
-  dplyr::mutate(
-    rank_total = rank_M +
-      ifelse(is.na(rank_beta), 0, rank_beta) +
-      ifelse(is.na(rank_gamma), 0, rank_gamma)
-  ) |>
-  dplyr::arrange(error.test)
+# # 1- results table:
+# res_df <- do.call(rbind, lapply(res, function(x) if (length(x) == 14) x[c(1:2, 5:12)] else x)) |>
+#   as.data.frame() |>
+#   dplyr::mutate(
+#     dplyr::across(
+#       c(time, error.test, corr.test, error.train, sparsity_beta, sparsity_gamma, rank_M, rank_beta, rank_gamma),
+#       as.numeric
+#     )
+#   ) |>
+#   dplyr::mutate(dplyr::across(tidyselect::where(is.numeric), ~ round(.x, 3))) |>
+#   dplyr::mutate(
+#     rank_total = rank_M +
+#       ifelse(is.na(rank_beta), 0, rank_beta) +
+#       ifelse(is.na(rank_gamma), 0, rank_gamma)
+#   ) |>
+#   dplyr::arrange(error.test)
 
 out_all <- list(dat = data, fits = fits, res = res_df, res_list = res, out = out)
 
@@ -393,7 +393,9 @@ ume_sel$movie <- factor(
 library(ggh4x)
 library(grid)
 
-g <- ggplot(ume_sel, aes(x = age, y = estimate, fill = age)) +
+g <- ume_sel %>%
+  rename(`Age Group`=age) %>%
+  ggplot(aes(x = `Age Group`, y = estimate, fill = `Age Group`)) +
   geom_boxplot(width = 0.7, outlier.shape = 16, outlier.size = 0.7, alpha = 0.9) +
   ggh4x::facet_nested(
     cols = vars(title, gender),
@@ -403,34 +405,49 @@ g <- ggplot(ume_sel, aes(x = age, y = estimate, fill = age)) +
       text_x = ggh4x::elem_list_text(face = c("bold"))
     )
   ) +
-  scale_fill_brewer(palette = "Set2", name = "Age") +
+  scale_fill_rss_d(palette = "signif_seq",-1) +
   scale_y_continuous(
-    "Estimated rating",
+    "Fitted Rating",
     limits = c(0.5, 5),
-    breaks = seq(0.5, 5, 0.5),
-    expand = expansion(mult = c(0.02, 0.05))
+    breaks = seq(0.0, 5, 1),
+    # expand = expansion(mult = c(0.02, 0.05))
   ) +
-  scale_x_discrete(name = "Age group") +
-  theme_bw(base_size = 12) +
+  # scale_x_discrete(name = element_text()) +
+  theme_significance() +
+  # theme_bw(base_size = 12) +
   theme(
-    strip.placement = "outside",
-    strip.background.x = element_blank(),
-    panel.spacing.x = unit(0, "pt"),
-    panel.border = element_rect(colour = "grey70", fill = NA, linewidth = 0.4),
-    panel.grid.major.x = element_blank(),
-    # axis.text.x = element_text(angle = 0, hjust = 0),
     legend.position = "none",
-    ggh4x.facet.nestline = element_line(colour = "grey70")
-  ) +
-  ggtitle(
-    "Fitted Movie Ratings (Full Model)",
-    subtitle = "Selected children's movies by gender and age group"
-  )
+    legend.justification = "left",
+     strip.text = element_text(face = "bold", size = 11),
+    strip.background = element_rect(fill = "grey98"),
+    # axis.ticks.x = element_blank(),
+    # axis.title.x = element_blank(),
+    # axis.text.x = element_blank()
+    # strip.placement = "outside",
+    # strip.background.x = element_blank(),
+    # panel.spacing.x = unit(0, "pt"),
+    # panel.border = element_rect(colour = "grey70", fill = NA, linewidth = 0.4),
+    # panel.grid.major.x = element_blank(),
+    # # axis.text.x = element_text(angle = 0, hjust = 0),
+    # legend.position = "none",
+    # ggh4x.facet.nestline = element_line(colour = "grey70")
+  ) ; g
+  # ggtitle(
+  #   "Fitted Movie Ratings on IMR-IXZ",
+  #   subtitle = "Selected children's movies by gender and age group"
+  # ); g
 
 print(g)
 
-# ggsave("./article_results/movielens/data/plot_intercept_model.png",
-#        g, width = 320/25.4, height = 150/25.4, dpi = 600)
+
+ggsave(
+  filename = "./data/MovieLens/plot_full_model.pdf", 
+  plot = g, 
+  device = cairo_pdf,  
+  width = 12,           
+  height = 6,          
+  units = "in"
+)
 
 ggsave(
   filename = "./data/MovieLens/plot_full_model.png",

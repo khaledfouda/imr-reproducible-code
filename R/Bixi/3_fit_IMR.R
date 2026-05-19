@@ -14,6 +14,8 @@ split_id <- 1
 train_size <- 55
 total_results <- data.frame()
 
+split_id = 1; train_size = train_seq[1]; # used for diagnostics
+
 for(split_id in 1:num_splits){
   for(train_size in train_seq){
     

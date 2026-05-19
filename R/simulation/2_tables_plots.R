@@ -8,6 +8,9 @@ require(IMR)
 require(kableExtra)
 require(magrittr)
 require(scales)
+library(RSSthemes)
+
+
 
 results1 <- rw_a_file("results_scenario_1.rds",
                     directory = "./data/Simulation/",
@@ -100,159 +103,174 @@ kbl(
 #-------------------------------------------------------------------------------
 # Generate Figure 1 of Scenario 2
 #-------------------------------------------------------------------------------
-
-
-results2_1 %>%
-  mutate(sparsity = round(missing_pct, 2)) %>%
-  dplyr::select(theta_rrmse, test_rrmse, beta_rrmse, 
-                M_rrmse, gamma_rrmse, sparsity,
-                rank, model) %>%
-  rename(beta = beta_rrmse, 
-         M = M_rrmse,
-         theta = theta_rrmse,
-         gamma = gamma_rrmse,
-         test = test_rrmse) %>%
-  dplyr::group_by(model, sparsity) %>%
-  dplyr::mutate(M = if_else(model == "SI", NA, M)) %>%
-  dplyr::mutate(model = if_else(model == "SI", "SoftImpute", model)) %>%
-  dplyr::summarize_all(c(error_mean=mean,error_sd= sd)) %>%
-  dplyr::ungroup() %>%
-  pivot_longer(-c(model, sparsity),
-               names_to = c("metric", "stat"),
-               names_pattern = "^(.*)_error_(mean|sd)$",
-               values_to = "val") %>%
-  pivot_wider(names_from = stat, values_from = val) %>%
-  mutate(sparsity = sparsity) %>%
-  arrange(model, sparsity) %>%
-  mutate(ymin = pmax(0, mean-sd), ymax = mean+sd)  ->
-  sim2.long
-
-
+plot_data <- results2_1 |>
+  mutate(
+    sparsity = round(missing_pct, 2),
+    model = if_else(model == "SI", "Soft-Impute", model),
+    M_rrmse = if_else(model == "Soft-Impute", NA_real_, M_rrmse)
+  ) |>
+  select(
+    theta = theta_rrmse, test = test_rrmse, beta = beta_rrmse, 
+    M = M_rrmse, gamma = gamma_rrmse, rank, sparsity, model
+  ) |>
+  mutate(rank = rank - 15) |> 
+  summarise(
+    across(
+      c(theta, test, beta, M, gamma, rank), 
+      list(mean = ~mean(.x, na.rm = TRUE), sd = ~sd(.x, na.rm = TRUE))
+    ),
+    .by = c(model, sparsity)
+  ) |>
+  pivot_longer(
+    cols = -c(model, sparsity),
+    names_to = c("metric", ".value"),
+    names_sep = "_" 
+  ) |>
+  mutate(
+    ymin = pmax(0, mean - sd), 
+    ymax = mean + sd
+  )
 metric_labels <- c(
-  beta = "RRMSE(beta)",
+  beta  = "RRMSE(beta)",
   gamma = "RRMSE(Gamma)",
-  M    = "RRMSE(M)",
-  theta    = "RRMSE(Theta)",
-  test = "RRMSE(test)",
-  rank       = "Estimated~Rank"
+  M     = "RRMSE(M)",
+  theta = "RRMSE(Theta)",
+  test  = "RRMSE(Theta[plain(test)])",
+  rank  = "textstyle('Estimated Rank') - textstyle('True Rank')"
 )
-sim2.long %<>%
-  mutate(metric_lab = factor(metric,
-                             levels=names(metric_labels),
-                             labels = unname(metric_labels)))
 
+plot_data <- plot_data |>
+  mutate(
+    metric_lab = factor(metric, levels = names(metric_labels), labels = unname(metric_labels))
+  )
+
+bounds_data <- data.frame(
+  metric_lab = factor(
+    rep(metric_labels[1:5],each=2),
+    levels = unname(metric_labels)
+  ),
+  mean = c(0.4, 1.0, 0.4, 1.0, 0.4, 1.0, 0.2, 0.7, 0.2, 0.7),
+  sparsity = 0.7 
+)
 rank_line_data <- data.frame(
-  metric_lab = factor("Estimated~Rank", levels = unname(metric_labels)),
+  metric_lab = factor(metric_labels[6], levels = unname(metric_labels)),
   yintercept = 15
 )
-okabe_ito <- c("#56B4E9","#E69F00")
-metrics <- unique(sim2.long$metric)
+pcolors <- c(signif_blue, signif_orange)
 
-ggplot(sim2.long, aes(x = sparsity, y = mean, color = model, fill = model, group = model)) +
-  geom_hline(data = rank_line_data, aes(yintercept = yintercept),
-             linetype = "dashed", color = "black", alpha = 0.6) +
+sim2.g <- ggplot(plot_data, aes(x = sparsity, y = mean, color = model, fill = model)) +
+    geom_blank(data = bounds_data, aes(y = mean), inherit.aes = FALSE) +
+  #   geom_hline(
+  #   data = rank_line_data, aes(yintercept = yintercept),
+  #   linetype = "dashed", color = "black", alpha = 0.6
+  # ) +
   geom_ribbon(aes(ymin = ymin, ymax = ymax), alpha = 0.15, color = NA) +
-  geom_line(size = 1) +
+  geom_line(linewidth = 1) +
   geom_point(size = 1.6) +
-  scale_color_manual(values = okabe_ito) +
-  scale_fill_manual(values  = okabe_ito) +
-  scale_x_continuous(labels = percent_format(accuracy = 1), breaks = seq(.7, 0.95, length=6)) +
-  facet_wrap(~ metric_lab, labeller = label_parsed, ncol=3, scales="free_y") +
-  labs(x = "Sparsity Level", y = NULL, color = "Model", fill = "Model") +
-  theme_minimal(base_size = 10) +
-  theme_bw() +
+  
+  scale_color_manual(values = pcolors) +
+  scale_fill_manual(values  = pcolors) +
+  scale_y_continuous(n.breaks = 5) +
+  scale_x_continuous(labels = percent_format(accuracy = 1), breaks =seq(0.7, 0.95, by = 0.05)) +
+  facet_wrap(~ metric_lab, labeller = label_parsed, ncol = 3, scales = "free_y") +
+  labs(x = "Sparsity Level", y = "Estimation Error", color = "Model", fill = "Model") +
+  theme_significance() +
   theme(
     legend.position = "top",
     legend.justification = "left",
-    strip.text = element_text(face = "bold")
-  ) -> sim2.g; sim2.g
+    strip.text = element_text(face = "bold", size = 11)
+  ); sim2.g
 
-ggsave("./data/Simulation/figure_1_scenario_2.png", 
-       sim2.g, width = 320/25.4, height = 150/25.4, dpi = 600)
+
+
+ggsave(
+  filename = "./data/Simulation/figure_1_scenario_2.pdf", 
+  plot = sim2.g, 
+  device = cairo_pdf,  
+  width = 12,           
+  height = 6,          
+  units = "in"
+)
+# 
+# ggsave("./data/Simulation/figure_1_scenario_2.png", 
+#        sim2.g, width = 320/25.4, height = 150/25.4, dpi = 600)
 
 #-------------------------------------------------------------------------------
 # Generate Figure 2 of Scenario 2
 #-------------------------------------------------------------------------------
 
-results2_2 %>%
-  mutate(sparsity = round(missing_pct, 2)) %>%
-  dplyr::select(test_rrmse, sparsity, time,
-                model) %>%
-  rename(test = test_rrmse) %>%
-  group_by(model, sparsity) %>%
+
+
+plot_titles <- c("Error Ratio (IMR / Soft-Impute)", "Time Ratio (IMR / Soft-Impute)")
+
+plot_data <- results2_2 |>
+  mutate(sparsity = round(missing_pct, 2)) |> 
   summarise(
     mean_time = mean(time, na.rm = TRUE),
-    mean_error = mean(test, na.rm = TRUE),
-    .groups = "drop"
-  ) %>% arrange(sparsity, mean_time) %>%
-  pivot_wider(
-    names_from = model,
-    values_from = c(mean_time, mean_error)
-  ) %>%
-  mutate(
-    time_ratio = mean_time_IMR / mean_time_SI,
-    error_improve = (mean_error_SI - mean_error_IMR) / mean_error_SI
-  ) %>%
-  select(sparsity, time_ratio, error_improve) %>%
+    mean_error = mean(test_rrmse, na.rm = TRUE),
+    .by = c(model, sparsity)
+  ) |>
+  pivot_wider(names_from = model, values_from = c(mean_time, mean_error)) |>
+  transmute(
+    sparsity,
+    `Time Ratio (IMR / Soft-Impute)` = mean_time_IMR / mean_time_SI,
+    `Error Ratio (IMR / Soft-Impute)` = mean_error_IMR / mean_error_SI
+  ) |>
   pivot_longer(
-    cols = c(time_ratio, error_improve),
-    names_to = "measure",
+    cols = -sparsity,
+    names_to = "measure_label",
     values_to = "value"
-  ) %>%
-  mutate(
-    measure_label = case_when(
-      measure == "time_ratio" ~ "Relative Computational Cost",
-      measure == "error_improve" ~ "RRMSE Reduction (%) Relative to SoftImpute"
-    )
-  ) %>%
-  mutate(measure_label = factor(measure_label, levels = c(
-    "RRMSE Reduction (%) Relative to SoftImpute",
-    "Relative Computational Cost"
-  )))-> plot_data
+  ) |>
+  mutate(measure_label = factor(measure_label, levels = plot_titles)) # to have the order i want
 
-bounds <- data.frame(
-  measure_label = factor("RRMSE Reduction (%) Relative to SoftImpute",
-                         levels = levels(plot_data$measure_label)),
-  sparsity = 0.95,
-  value = c(0, 0.7)
+
+limit_time <- c(0, 0.4)
+limit_error <- c(0, 1.0)
+
+facet_bounds <- data.frame(
+  measure_label = rep(plot_titles, each=2),
+  sparsity = 0.7,            
+  value = c(limit_error, limit_time) 
 )
 
-ggplot(plot_data, aes(x = (sparsity), y = value)) +
-  geom_blank(data = bounds) +
-  
-  geom_hline(data = filter(plot_data, measure == "time_ratio"),
-             aes(yintercept = 1), linetype = "dashed", color = "grey50") +
-  geom_hline(data = filter(plot_data, measure == "error_improve"),
-             aes(yintercept = 0), linetype = "dashed", color = "grey50") +
-  
-  geom_line(size = 1, color = "#E69F00") +
-  geom_point(size = 2, color = "#E69F00") +
-  
+diff_plot <- ggplot(plot_data, aes(x = sparsity, y = value)) +
+  geom_blank(data = facet_bounds) +
+  geom_hline(aes(yintercept = 1), data.frame(measure_label=plot_titles[1]), linetype = "dashed", color = "grey50") +
+  geom_line(linewidth = 1, color=signif_blue) +
+  geom_point(size = 2) +
   facet_wrap(~ measure_label, scales = "free_y", ncol = 1) +
-  scale_x_continuous("Sparsity Level", labels = percent_format(accuracy = 1),
-                     breaks = seq(0.95, 0.7, length.out=6)) +
+  scale_x_continuous(
+    name = "Sparsity Level", 
+    labels = percent_format(accuracy = 1),
+    breaks = seq(0.7, 0.95, by = 0.05)
+  ) +
   scale_y_continuous(
-    name = NULL,
-    labels = function(x) {
-      ifelse(x <= 1 & x > -1, percent(x, accuracy = 1), number(x, accuracy = 0.1, suffix = "x"))
-    },
-    breaks = function(limits) {
-      if (limits[2] <= 0.8) {
-        return(c(0, .1, .3, .5, .7))#c(seq(0, 0.7, .2),.7))
-      } else {
-        return(scales::extended_breaks()(limits))
-      }
+    name = "Ratio",
+    breaks = ~ if (max(.x, na.rm = TRUE) <= 0.4) {
+      seq(limit_time[1], limit_time[2], by = 0.2) 
+    } else {
+      seq(limit_error[1], limit_error[2], by = 0.2) # Breaks for the Error Ratio 
     }
   ) +
-  
-  theme_bw() +
+  theme_significance() +
   theme(
+    legend.position = "none",
     strip.text = element_text(face = "bold", size = 11),
     strip.background = element_rect(fill = "grey95")
-  ) -> diff_plot; diff_plot
+  ); diff_plot
 
-ggsave("./data/Simulation/figure_2_scenario_2.png",  
-       diff_plot, width = 320/25.4, height = 150/25.4, dpi = 600)
+
+ggsave(
+  filename = "./data/Simulation/figure_2_scenario_2.pdf", 
+  plot = diff_plot, 
+  device = cairo_pdf,  
+  width = 12,           
+  height = 6,          
+  units = "in"
+)
+# 
+# ggsave("./data/Simulation/figure_2_scenario_2.png",  
+#        diff_plot, width = 320/25.4, height = 150/25.4, dpi = 600)
 
 #----------------------------------
 # DONE
