@@ -1,0 +1,19 @@
+# Performs the simulations in the articles.
+
+# files:
+
+1. 1_simulations.R
+
+Performs all simulations and saves output fit files to disk. Takes a bit to run as it fits all models.
+run it with source.
+results are saved to ./data/simulation/
+
+2. 2_tables_plots.R
+
+Uses the saved fit files to produce the table and two plots in the article. The table is printed and
+plots are both printed and saved to ./data/simulation/
+run it with source.
+
+3. helper.R. contains helper functions. no need to source it. The other two files do it.
+
+-- ignore other files in this folder.

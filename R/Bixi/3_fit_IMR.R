@@ -54,7 +54,7 @@ data <- update(data, row_intercept = TRUE, col_intercept  = TRUE)
 
 # to get more accurate time, we run each fit for 30 times and take the average.
 total_time <- 0
-for(.place_holder in 1:5){
+for(.place_holder in 1:30){
 start_time <- Sys.time()
 fitsim <- imr_fit(
   data = data,
@@ -65,7 +65,7 @@ fitsim <- imr_fit(
 total_time_secs <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")),4)
 total_time <- total_time + total_time_secs
 }
-total_time_secs <- total_time / 5
+total_time_secs <- total_time / 30
 
 
 output <- reconstruct(fitsim, data,FALSE)
@@ -87,7 +87,7 @@ data <- update(data, row_similarity = FALSE, col_similarity = FALSE)
 
 # to get more accurate time, we run each fit for 30 times and take the average.
 total_time <- 0
-for(.place_holder in 1:5){
+for(.place_holder in 1:30){
   start_time <- Sys.time()
 fitn <- imr_fit(
   data = data,
@@ -98,7 +98,7 @@ fitn <- imr_fit(
 total_time_secs <- round(as.numeric(difftime(Sys.time(), start_time, units = "secs")),4)
 total_time <- total_time + total_time_secs
 }
-total_time_secs <- total_time / 5
+total_time_secs <- total_time / 30
 
 
 output <- reconstruct(fitn, data,FALSE)

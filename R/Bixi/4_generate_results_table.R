@@ -98,6 +98,3 @@ df |>
   ) |>
   dplyr::select(train_size, improvement_pct)
 
-
-df %>% filter(train_size == 70) %>% as.data.frame() %>%
-  mutate(time_mean = time_mean*60)
