@@ -1,11 +1,5 @@
 source("./code/helper.R")
 
-require(tidyverse)
-require(IMR)
-require(kableExtra)
-require(magrittr)
-require(scales)
-library(RSSthemes)
 
 
 

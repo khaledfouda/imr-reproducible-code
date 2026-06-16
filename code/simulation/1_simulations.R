@@ -3,12 +3,8 @@ source("./code/other_models/SoftImpute_cv.R")
 source("./code/other_models/MCCI.R")
 source("./code/simulation/helper.R")
 
-require(tidyverse)
-require(IMR)
 
 # global settings:
-num_replications = 500
-convergence <- IMR::imr_convergence(maxit=1000, thresh=1e-6)
 #==========================================
 # setting 1)
 #==========================================
@@ -22,7 +18,7 @@ all_res <- data.frame()
 grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta = 0, nuclear = c(0,40,40,2))
 print(grid)
 
-for(b in 1:num_replications){
+for(b in 1:NUM_REPLICATIONS){
   seed = 2025 + b
   set.seed(seed)
   for(d in dims){
@@ -46,12 +42,12 @@ for(b in 1:num_replications){
                         print.best = FALSE,
                         tol = grid$nuclear$streaks,
                         n.lambda = grid$nuclear$length,
-                        maxit = convergence$maxit,
-                        thresh = convergence$thresh,
+                        maxit = CONVERGENCE$maxit,
+                        thresh = CONVERGENCE$thresh,
                         test_error = get_metric("rmse"),
                         seed = seed)
     
-    fitimr <- IMR::imr_tune(mdat, grid, convergence=convergence, fast_nuclear = FALSE,
+    fitimr <- IMR::imr_tune(mdat, grid, convergence=CONVERGENCE, fast_nuclear = FALSE,
                             seed = seed, n_cores = 7, verbose = 0)
     
     
@@ -150,7 +146,7 @@ increase_sparsity <- function(dat, step=0.05){
   return(dat)
 }
 
-convergence <- IMR::imr_convergence(maxit=1000, thresh=1e-6)
+
 grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta=c(0), gamma=c(0), nuclear=c(0,120,60,2));
 print(grid)
 
@@ -160,8 +156,7 @@ q = 5;
 r = 5;
 missing_pct = seq(.7, .98, .05)
 all_res <- res <- data.frame()
-# b = 1; pct=1
-for(b in 1:num_replications){
+for(b in 1:NUM_REPLICATIONS){
   seed = 2025 + b
   start1 = Sys.time()
   set.seed(seed)
@@ -184,13 +179,13 @@ for(b in 1:num_replications){
                         trace = FALSE,
                         print.best = FALSE,
                         tol = grid$nuclear$streaks,
-                        maxit = convergence$maxit,
-                        thresh = convergence$thresh,
+                        maxit = CONVERGENCE$maxit,
+                        thresh = CONVERGENCE$thresh,
                         n.lambda = grid$nuclear$length,
                         test_error = get_metric("rmse"),
                         seed = seed)
     
-    fitimr <- IMR::imr_tune(mdat, grid, convergence=convergence, fast_nuclear = FALSE,
+    fitimr <- IMR::imr_tune(mdat, grid, convergence=CONVERGENCE, fast_nuclear = FALSE,
                             seed = seed, n_cores = 7, verbose = 0)
     
     
@@ -299,7 +294,7 @@ r = 5;
 missing_pct = seq(.7, .98, .05)
 all_res <- res <- data.frame()
 
-for(b in 1:num_replications){
+for(b in 1:NUM_REPLICATIONS){
   seed = 2025 + b
   start1 = Sys.time()
   set.seed(seed)
@@ -318,15 +313,15 @@ for(b in 1:num_replications){
     fitsi <- softImpute::softImpute(dat$Y,
                                     rank.max = simpute_rank$rank,
                                     lambda = simpute_rank$lambda_m,
-                                    thresh = convergence$thresh,
-                                    maxit = convergence$maxit,
+                                    thresh = CONVERGENCE$thresh,
+                                    maxit = CONVERGENCE$maxit,
                                     trace.it = FALSE,final.svd = TRUE, type = "als")
     time.si = as.numeric(Sys.time() -  start, units = "secs")
     
     start = Sys.time()
     fitimr <- IMR::imr_fit(mdat, rank = best_hparams$rank_m,
                            lambda_m = best_hparams$lambda_m,
-                           convergence=convergence)
+                           convergence=CONVERGENCE)
     time.imr = as.numeric(Sys.time() -  start, units = "secs")
     
     

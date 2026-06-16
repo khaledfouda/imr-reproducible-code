@@ -1,3 +1,15 @@
+library(tidyverse)
+library(IMR)
+library(kableExtra)
+library(magrittr)
+library(scales)
+library(RSSthemes)
+
+#------------------------------------------------------------------------------
+# configurations >>
+NUM_REPLICATIONS <- 500
+CONVERGENCE <- IMR::imr_convergence(maxit=1000, thresh=1e-6)
+
 generate_simulated_data <- function(
     n = 300,
     m = 400,
