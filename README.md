@@ -4,7 +4,7 @@ This repository contains the reproduciblity materials for the paper "Incomplete 
 
 
 
-> **Incomplete Matrix Regression**
+**Incomplete Matrix Regression**
 > Khaled Fouda, Aurélie Labbe, and Karim Oualkacha
 
 ## Abstract
