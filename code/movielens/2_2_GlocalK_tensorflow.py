@@ -13,12 +13,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 
-# Navigate to the project root directory
-script_dir = os.path.dirname(os.path.abspath(__file__)) if '__file__' in dir() else os.getcwd()
-project_root = os.path.abspath(os.path.join(script_dir, '..', '..', '..'))
-os.chdir(project_root)
-print(f"Working directory: {os.getcwd()}")
-print(f"TensorFlow version: {tf.__version__}")
+
 
 # Force TensorFlow 1 to use a single CPU core (equivalent to PyTorch benchmark setup)
 config = tf.ConfigProto(
@@ -41,9 +36,11 @@ epoch_p = 20 # number of pretraining epochs (outer loops)
 epoch_f = 30 # number of finetuning epochs (outer loops)
 
 try:
-    import config
-    if hasattr(config, 'epoch_p'): epoch_p = config.epoch_p
-    if hasattr(config, 'epoch_f'): epoch_f = config.epoch_f
+    import config as cfg
+    if hasattr(cfg, 'epoch_p'): epoch_p = cfg.epoch_p
+    if hasattr(cfg, 'epoch_f'): epoch_f = cfg.epoch_f
+    if hasattr(cfg, 'iter_p'): iter_p = cfg.iter_p
+    if hasattr(cfg, 'iter_f'): iter_f = cfg.iter_f
 except ImportError:
     pass
 dot_scale = 0.5 # dot product weight for global kernel
@@ -114,12 +111,9 @@ def load_data_1m_test(path, udict, mdict, delimiter='::'):
 # ---------------------------------------------------------------------------
 data_path = './data/movielens/raw/'
 
-try:
-    path = data_path + '/'
-    n_m, n_u, train_r, train_m, test_r, test_m, udict, mdict = load_data_1m(path=path, delimiter='::', frac=0.1, seed=1234)
-    final_test_m, final_test_r = load_data_1m_test(path, udict, mdict, delimiter='::')
-except Exception:
-    print('Error: Unable to load data')
+path = data_path + '/'
+n_m, n_u, train_r, train_m, test_r, test_m, udict, mdict = load_data_1m(path=path, delimiter='::', frac=0.1, seed=1234)
+final_test_m, final_test_r = load_data_1m_test(path, udict, mdict, delimiter='::')
 
 # ---------------------------------------------------------------------------
 # Network Functions

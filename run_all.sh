@@ -22,9 +22,9 @@ source ./helper.sh
 
 # Define the variables
 set_simulation_reps 500 1000 1e-6 1e6 5
-set_bixi_splits 50
-set_movielens_cv FALSE
-set_glocalk_epochs 20 30 500 1000
+set_bixi_config 50 1000 500
+set_movielens_config FALSE 1000 1e-7 NULL 30 1e-6
+set_glocalk_epochs 20 30 50 10 500 1000
 
 
 # ---------- 1. Simulation Study ----------
@@ -69,6 +69,10 @@ Rscript ./code/movielens/2_1_prepare_python_data.R
 
 echo "  [3/4] Fitting GLocal-K PyTorch model (2_2_GlocalK_torch.py)..."
 python ./code/movielens/2_2_GlocalK_torch.py
+
+#or
+# docker build --platform linux/amd64 -t tf1-glocalk -f code/movielens/Dockerfile .
+# docker run --rm --platform linux/amd64 -v "$(pwd)":/project tf1-glocalk python code/movielens/2_2_GlocalK_tensorflow.py
 
 echo "  [4/4] Generating results table and plot (3_generate_results_table.R)..."
 Rscript ./code/movielens/3_generate_results_table.R

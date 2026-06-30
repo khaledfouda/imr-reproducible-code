@@ -128,7 +128,7 @@ The confiugrations of each analysis is controlled by configuration files in each
   those defaults if present; it is loaded after `config_default.R`.
 
 `run_all.sh` and `run_all_lite.sh` both `source helper.sh` and call its setter
-functions (`set_simulation_reps`, `set_bixi_splits`, `set_movielens_cv`,
+functions (`set_simulation_reps`, `set_bixi_config`, `set_movielens_config`,
 `set_glocalk_epochs`) to generate these `config.R`/`config.py` override files
 before running — `run_all.sh` writes the full settings, `run_all_lite.sh` writes
 the reduced ones. To change settings for a individual script run, edit the

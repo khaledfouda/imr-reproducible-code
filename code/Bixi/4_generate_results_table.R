@@ -1,19 +1,17 @@
 source("./code/helper.R")
+source("./code/Bixi/helper.R")
 
 rw_a_file(
   "results_bktr.rds",
   directory = "./output/Bixi/",
   type = "read"
 ) |>
-  rename(rank_beta = rank_x,
-         rank_gamma = rank_z) |> 
   rbind(
     rw_a_file(
       "results_imr.rds",
       directory = "./output/Bixi/",
       type = "read"
-    ) %>%
-      dplyr::select(-sparse_beta, -sparse_gamma)
+    ) 
   ) |>
   group_by(model, train_size) |>
   summarise(across(everything(), list(mean = mean, sd = sd)), .groups = "drop") |>

@@ -9,10 +9,6 @@ data <- load_movielens1m()
 model_data <- imr_data(data$Y, data$X, data$Z, seed = seed, val_prop = 0.2)
 print(model_data)
 
-# convergence for tuning and convergence2 for fitting.
-convergence <- imr_convergence(maxit = 1000, thresh = 1e-5)
-convergence2 <- imr_convergence(maxit = 1000, thresh = 1e-7)
-
 # grid of hyperparameters
 grid <- imr_tune_grid(
   beta = c(0, 0.4, 60),
@@ -67,7 +63,7 @@ imrxz_fit <- IMR::imr_fit(model_data,
   lambda_m = imrxz_hp$lambda_m,
   lambda_beta = imrxz_hp$lambda_beta,
   lambda_gamma = imrxz_hp$lambda_gamma,
-  convergence = convergence2
+  convergence = convergence
 )
 time <- Sys.time() - start
 imrxz_fit$time_secs <- as.numeric(time, "secs")
@@ -112,7 +108,7 @@ start <- Sys.time()
 imri_fit <- IMR::imr_fit(model_data,
   rank = imri_hp$rank,
   lambda_m = imri_hp$lambda_m,
-  convergence = convergence2
+  convergence = convergence
 )
 time <- Sys.time() - start
 imri_fit$time_secs <- as.numeric(time, "secs")
@@ -158,8 +154,8 @@ start <- Sys.time()
 simpute_fit <- softImpute::softImpute(y_dense,
   rank.max = si_hparams$rank,
   lambda = si_hparams$lambda,
-  thresh = convergence2$thresh,
-  maxit = convergence2$maxit,
+  thresh = convergence$thresh,
+  maxit = convergence$maxit,
   trace.it = FALSE, final.svd = TRUE, type = "als"
 )
 simpute_fit$time_secs <- as.numeric(Sys.time() - start, units = "secs")
@@ -169,6 +165,9 @@ saveRDS(simpute_fit, "./output/movielens/model_fits/simpute_fit.rds")
 load("./data/movielens/raw/Movie_Y.Rdata", verbose = T) # loads Y
 M <- MCAI.fit(Y, data$X,
   save_to_file = T,
+  tol = max(1e-6, MCAI_TOL),
+  max_iter = min(30L, as.integer(MCAI_MAXIT)),
+  rhat = MCAI_RHAT,
   file_location = "./output/movielens/model_fits/mcai_fit.rds"
 )
 #-------------------------------------------------------------------------------

@@ -38,9 +38,9 @@ lambda_s = 0.006 # regularisation of sparsity of the final matrix
 dot_scale = 1 # dot product weight for global kernel
 
 try:
-    import config
-    if hasattr(config, 'max_epoch_p'): max_epoch_p = config.max_epoch_p
-    if hasattr(config, 'max_epoch_f'): max_epoch_f = config.max_epoch_f
+    import config as cfg
+    if hasattr(cfg, 'max_epoch_p'): max_epoch_p = cfg.max_epoch_p
+    if hasattr(cfg, 'max_epoch_f'): max_epoch_f = cfg.max_epoch_f
 except ImportError:
     pass
 

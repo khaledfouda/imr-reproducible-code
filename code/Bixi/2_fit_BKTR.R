@@ -10,8 +10,8 @@ for (split_id in 1:NUM_SPLITS) {
   for (train_size in TRAIN_SEQ) {
     bktr_fit <- bixi_fit_bktr(
       split_id, train_size,
-      burn_in_iter = 1000,
-      sampling_iter = 500
+      burn_in_iter = BKTR_ITER_BURN,
+      sampling_iter = BKTR_ITER
     )
   }
 }

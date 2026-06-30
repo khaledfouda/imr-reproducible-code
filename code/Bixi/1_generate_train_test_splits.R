@@ -7,8 +7,8 @@ source("./code/helper.R")
 
 for(split_id in 1:NUM_SPLITS){
   bixi_generate_one_split(split_id,
-                          file_override = FALSE,
-                          create_folder = FALSE)
+                          file_override = TRUE,
+                          create_folder = TRUE)
 }
 # DONE
 #-------------------------------------------------------------------

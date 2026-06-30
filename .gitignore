@@ -8,8 +8,9 @@
 *.rds
 *.dat
 *.pdf
+*.csv
 !data/movielens/*
-
-
+*/__pycahce__/*
+*.pyc
 config.R
 config.py

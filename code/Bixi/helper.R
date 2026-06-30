@@ -454,14 +454,16 @@ bixi_fit_bktr_post <- function(split_id = 1,
   # obtain test estimates
   fit$fit$imputed_y_estimates |>
     as.data.frame() |>
-    merge(test_df, by = c("location", "time")) |>
+    mutate(time=as.Date(time)) |>
+    merge(mutate(test_df,time=as.Date(time)), by = c("location", "time")) |>
     dplyr::select(location, time, y_est, y) ->
     test.estimates
   
   # obtain train estimates
   fit$fit$imputed_y_estimates |>
     as.data.frame() |>
-    merge(filter(train_df, !is.na(y)), by = c("location", "time")) |>
+    mutate(time=as.Date(time)) |>
+    merge(mutate(filter(train_df, !is.na(y)),time=as.Date(time)), by = c("location", "time")) |>
     dplyr::select(location, time, y_est, y) ->
     train.estimates
   
@@ -473,3 +475,6 @@ bixi_fit_bktr_post <- function(split_id = 1,
   ) %>%
     mutate(rank_m = fit$fit$rank_decomp)
 }
+
+
+
