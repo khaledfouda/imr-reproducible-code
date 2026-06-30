@@ -9,8 +9,11 @@
 *.dat
 *.pdf
 *.csv
+output
 !data/movielens/*
 */__pycahce__/*
 *.pyc
 config.R
 config.py
+*.rds
+

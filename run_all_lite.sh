@@ -20,9 +20,9 @@ echo "============================================"
 source ./helper.sh
 
 # Define the variables
-set_simulation_reps 2 100 1e-3 5 2
+set_simulation_reps 2 20 1e-3 5 2
 set_bixi_config 2 2 2
-set_movielens_config FALSE 100 1e-3 1 1 1e-1
+set_movielens_config FALSE 20 1e-3 1 1 1e-1
 set_glocalk_epochs 2 2 2 2 2 2
 
 
