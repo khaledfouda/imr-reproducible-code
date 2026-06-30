@@ -4,7 +4,9 @@
 .Ruserdata
 *.rds
 *.dat
-!*results_bktr.rds
-!*results_imr.rds
+!/output/Bixi/results_bktr.rds
+!/output/Bixi/results_imr.rds
 !data/Simulation/*
-/R/movielens/.ipynb_checkpoints
+!data/movielens/*
+#!/output/movielens/*
+!/output/Simulation/*

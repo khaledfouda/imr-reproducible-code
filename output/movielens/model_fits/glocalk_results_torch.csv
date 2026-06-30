@@ -1,0 +1,2 @@
+model,time,test_rmse,test_spearman,train_rmse,rank_m,rank_beta,rank_gamma,sparse_beta,sparse_gamma,test_rrmse,train_rrmse,train_spearman
+Glocal-K,73.46704643567404,0.92274594,0.5167085893191021,0.8809481,3,,,,,0.8447856,0.7884851,0.5957360976244843
