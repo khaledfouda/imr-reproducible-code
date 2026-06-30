@@ -45,17 +45,28 @@ if (run_cross_validation) {
   )
 
   saveRDS(imrxz_cv, "./output/movielens/model_fits/IMR_IXZ_tune.rds")
+  imrxz_hp <- list(
+    rank = imrxz_cv$params$rank,
+    lambda_m = imrxz_cv$params$lambda_m,
+    lambda_beta = imrxz_cv$params$lambda_beta,
+    lambda_gamma = imrxz_cv$params$lambda_gamma
+  )
 } else {
-  imrxz_cv <- readRDS("./output/movielens/model_fits/IMR_IXZ_tune.rds")
+  imrxz_hp <- list(
+    rank = 11,
+    lambda_m = 13.067,
+    lambda_beta = 0.11525,
+    lambda_gamma = 0.4
+  )
 }
 
 # we now fit using the optimal hyper-parameters.
 start <- Sys.time()
 imrxz_fit <- IMR::imr_fit(model_data,
-  rank = imrxz_cv$params$rank,
-  lambda_m = imrxz_cv$params$lambda_m,
-  lambda_beta = imrxz_cv$params$lambda_beta,
-  lambda_gamma = imrxz_cv$params$lambda_gamma,
+  rank = imrxz_hp$rank,
+  lambda_m = imrxz_hp$lambda_m,
+  lambda_beta = imrxz_hp$lambda_beta,
+  lambda_gamma = imrxz_hp$lambda_gamma,
   convergence = convergence2
 )
 time <- Sys.time() - start
@@ -86,16 +97,23 @@ if (run_cross_validation) {
     seed = seed, verbose = 1
   )
   saveRDS(imri_cv, "./output/movielens/model_fits/IMR_I_tune.rds")
+  imri_hp <- list(
+    rank = imri_cv$params$rank,
+    lambda_m = imri_cv$params$lambda_m,
+    lambda_beta = imri_cv$params$lambda_beta,
+    lambda_gamma = imri_cv$params$lambda_gamma
+  )
 } else {
-  imri_cv <- readRDS("./output/movielens/model_fits/IMR_I_tune.rds")
+  imri_hp <- list(
+    rank = 13,
+    lambda_m = 16.7-886,
+  )
 }
 # we now fit using the optimal hyper-parameters.
 start <- Sys.time()
 imri_fit <- IMR::imr_fit(model_data,
-  rank = imri_cv$params$rank,
-  lambda_m = imri_cv$params$lambda_m,
-  lambda_beta = imri_cv$params$lambda_beta,
-  lambda_gamma = imri_cv$params$lambda_gamma,
+  rank = imri_hp$rank,
+  lambda_m = imri_hp$lambda_m,
   convergence = convergence2
 )
 time <- Sys.time() - start
@@ -128,8 +146,11 @@ if (run_cross_validation) {
   simpute_cv$time_secs <- as.numeric(time_si, "secs")
   simpute_cv$time <- round(as.numeric(time_si, "mins"), 2)
   saveRDS(simpute_cv, "./output/movielens/model_fits/simpute_cv.rds")
+  si_hparams <- list(rank = simpute_cv$rank.max,
+                     lambda = simpute_cv$lambda)
 } else {
-  simpute_cv <- readRDS("./output/movielens/model_fits/simpute_cv.rds")
+  si_hparams <- list(rank = 20,
+                     lambda = 6.075)
 }
 # we now fit using the chosen hyperparameters.
 #  softimpute expects a normal matrix.
@@ -137,8 +158,8 @@ y_dense <- as.matrix(data$Y)
 y_dense[y_dense == 0] <- NA
 start <- Sys.time()
 simpute_fit <- softImpute::softImpute(y_dense,
-  rank.max = simpute_cv$rank.max,
-  lambda = simpute_cv$lambda,
+  rank.max = si_hparams$rank,
+  lambda = si_hparams$lambda,
   thresh = convergence2$thresh,
   maxit = convergence2$maxit,
   trace.it = FALSE, final.svd = TRUE, type = "als"
