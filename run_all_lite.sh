@@ -9,7 +9,6 @@
 #
 # ============================================================================
 
-set -e  # Exit immediately on any error
 
 echo "============================================"
 echo " IMR Reproduction Pipeline"
@@ -21,7 +20,7 @@ echo "============================================"
 source ./helper.sh
 
 # Define the variables
-set_simulation_reps 2
+set_simulation_reps 2 100 1e-3 5 2
 set_bixi_splits 2
 set_movielens_cv FALSE
 set_glocalk_epochs 2 3 5 10

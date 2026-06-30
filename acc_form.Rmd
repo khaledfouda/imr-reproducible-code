@@ -336,8 +336,21 @@ This sequentially executes:
 Individual analyses can also be run independently; see the README files in each `code/` subdirectory.
 
 **Note:** The `run_all.sh` script uses a non-official PyTorch implementation of GLocal-K.
- To use the original TensorFlow 1 implementation (which matches the reported results), Docker is required. 
+ To use the original TensorFlow 1 implementation (which matches the reported results), Docker is required.
  See `code/movielens/README.md` for Docker build and run instructions.
+
+A second wrapper script, `run_all_lite.sh`, runs the entire
+pipeline in a a much shorter time using fewer replications. It is intended to confirm that the
+code executes in a given environment; its results do not match the numbers reported
+in the paper.
+
+The number of replications of each analysis is set by configuration files in
+each `code/` subfolder. `config_default.R` holds the full (paper) settings and is
+loaded first; an optional `config.R` (and `config.py` for the GLocal-K Python script)
+overrides them if present. The wrapper scripts source `helper.sh`, which generates
+these override files (`run_all.sh` writes the full settings, `run_all_lite.sh` the
+reduced ones). To change settings for a standalone run, edit the relevant
+`config_default.R`.
 
 ### Expected run-time
 
@@ -359,7 +372,11 @@ To run the full analysis on an Apple M4 CPU:
 -   The Bixi BKTR model fitting takes approximately 4 days (250 training datasets, ~22 minutes each). 
 -   The MovieLens application takes approximately 8 hours for all models and cross-validation.
 
-However, the time could be significantly reduced by reducing the number of replications. This can be achieved by modifying the relevant variables within the `helper.R` file in each code subdirectory.
+However, the run time can be reduced substantially by lowering the number of
+replications/splits/epochs. This is controlled by the `config_default.R` (R) and
+`config.py` (Python) files in each `code/` subfolder. The provided `run_all_lite.sh`
+script applies such reduced settings automatically and completes the full pipeline
+in a few minutes (its results do not match the paper).
 
 ### Additional information (optional)
 

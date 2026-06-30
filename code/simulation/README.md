@@ -6,14 +6,18 @@
 - **Code (`code/simulation/`):** Contains all R scripts required to execute the simulations and generate the tables and figures.
 - **Output (`output/simulation/`):** Contains the model outputs (fit files) and generated figures.
 
-## Execution Pipeline
+## Workflow
 - Requirements:
     - R packages: `tidyverse`, `magrittr`, `scales`, `kableExtra`, `RSSthemes`, `IMR`
 
 To fully reproduce the simulation results, execute the scripts in the following order.
 
-**Computational Complexity:**
-Running the full simulation (`1_simulations.R`) is computationally intensive because it fits multiple models (IMR, Soft-Impute, MCCI) across 500 replications for 4 dimension settings. To reduce computation time, we recommend reducing the number of replications inside the `helper.R` script.
+
+Running the full simulation (`1_simulations.R`) is computationally intensive because it fits multiple models (IMR, Soft-Impute, MCCI) 
+across 500 replications for 4 dimension settings. 
+The number of replications is controlled by `NUM_REPLICATIONS`, defined in `config_default.R` (full setting: 500) and loaded by `helper.R`.
+To reduce computation time, lower this value in `config_default.R` (or create a `config.R` in this folder that sets `NUM_REPLICATIONS`, 
+which overrides the default). The repository-level `run_all_lite.sh` script does this automatically for a fast end-to-end test.
 
 ### 1. Run the Simulations
 - **`1_simulations.R`**: Runs the simulations for all settings. Generates three `.rds` result files (dataframes) saved to `output/simulation/`:

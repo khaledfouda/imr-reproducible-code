@@ -99,14 +99,12 @@ if (run_cross_validation) {
   saveRDS(imri_cv, "./output/movielens/model_fits/IMR_I_tune.rds")
   imri_hp <- list(
     rank = imri_cv$params$rank,
-    lambda_m = imri_cv$params$lambda_m,
-    lambda_beta = imri_cv$params$lambda_beta,
-    lambda_gamma = imri_cv$params$lambda_gamma
+    lambda_m = imri_cv$params$lambda_m
   )
 } else {
   imri_hp <- list(
     rank = 13,
-    lambda_m = 16.7-886,
+    lambda_m = 16.7886
   )
 }
 # we now fit using the optimal hyper-parameters.

@@ -6,7 +6,7 @@ library(scales)
 library(RSSthemes)
 
 #------------------------------------------------------------------------------
-CONVERGENCE <- IMR::imr_convergence(maxit=1000, thresh=1e-6)
+
 
 source("./code/simulation/config_default.R")
 if (file.exists("./code/simulation/config.R")) {

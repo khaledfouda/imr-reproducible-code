@@ -2,11 +2,19 @@
 # Global configuration variables for R and Python scripts
 set_simulation_reps() {
   local num_rep=$1
+  local maxit=$2
+  local thresh=$3
+  local max_grid_size=$4
+  local mcci_nfolds=$5
   
   cat <<EOF > ./code/simulation/config.R
 NUM_REPLICATIONS <- ${num_rep}
+CONVERGENCE <- IMR::imr_convergence(maxit=${maxit}, thresh=${thresh})
+MAX_GRID_SIZE <- ${max_grid_size}
+MCCI_NFOLDS <- ${mcci_nfolds}
+
 EOF
-  echo "  Generated ./code/simulation/config.R with NUM_REPLICATIONS=${num_rep}"
+  echo "  Generated ./code/simulation/config.R with NUM_REPLICATIONS=${num_rep}, maxit=${maxit}, and thresh=${thresh}"
 }
 
 set_bixi_splits() {

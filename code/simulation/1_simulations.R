@@ -15,7 +15,7 @@ r = 10;
 missing_pct = 0.8
 
 all_res <- data.frame()
-grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta = 0, nuclear = c(0,40,40,2))
+grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta = 0, nuclear = c(0,40,min(40,MAX_GRID_SIZE),2))
 print(grid)
 mcci_params <- data.frame()
 for(b in 1:NUM_REPLICATIONS){
@@ -48,7 +48,7 @@ for(b in 1:NUM_REPLICATIONS){
                         seed = seed)
 
     fitimr <- IMR::imr_tune(mdat, grid, convergence=CONVERGENCE, fast_nuclear = FALSE,
-                            seed = seed, n_cores = 7, verbose = 0)
+                            seed = seed, n_cores = 9, verbose = 0)
 
     # note, for MCCI, the cross-validation always chose lambda_1=0 (no penalty on the covariate coefficients)
     # and alpha=1 (pure nuclear norm on the low-rank matrix); the value of the nuclear norm penalty itself
@@ -56,12 +56,12 @@ for(b in 1:NUM_REPLICATIONS){
     fitmcci <- MCCI.cv(Y = dat$Y,
                        X = dat$X,
                        W = dat$mask,
-                       n_folds = 5,
+                       n_folds = MCCI_NFOLDS,
                        numCores = 9,
                        seed = seed,
                        test_error = get_metric("rmse"),
                        lambda_1_grid = c(0), #seq(0, 1, length = 30),
-                       lambda_2_grid = seq(0.9, 0.1, length = 30),
+                       lambda_2_grid = seq(0.9, 0.1, length = min(30,MAX_GRID_SIZE)),
                        alpha_grid = c(1),#seq(0.992, 1, length = 30),
                        n1n2_optimized = TRUE,
                        return_diagn = FALSE)
@@ -162,7 +162,7 @@ increase_sparsity <- function(dat, step=0.05){
 }
 
 
-grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta=c(0), gamma=c(0), nuclear=c(0,120,60,2));
+grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta=c(0), gamma=c(0), nuclear=c(0,120,min(60,MAX_GRID_SIZE),2));
 print(grid)
 
 n = m = 1000

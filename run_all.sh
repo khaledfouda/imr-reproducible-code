@@ -21,7 +21,7 @@ echo "============================================"
 source ./helper.sh
 
 # Define the variables
-set_simulation_reps 500
+set_simulation_reps 500 1000 1e-6 1e6 5
 set_bixi_splits 50
 set_movielens_cv FALSE
 set_glocalk_epochs 20 30 500 1000
