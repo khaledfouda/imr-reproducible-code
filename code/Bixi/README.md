@@ -7,7 +7,7 @@ This directory contains the necessary R scripts to fully reproduce the Bixi bike
 **Considerations:**
  The BKTR model fitting step (`2_fit_BKTR.R`) is computationally intensive.
 It requires fitting 250 model variations, with each fit taking approximately 22 minutes on an m4 cpu core.
-Total estimated time is 4 hours.
+Total estimated time is 4 days.
 
 
 **Packages:**
