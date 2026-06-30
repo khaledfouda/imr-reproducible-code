@@ -14,4 +14,6 @@
 #!/output/movielens/*
 #!/output/Simulation/*
 *.rds
-/output/simulation
+!/output/movielens/model_fits/simpute_cv.rds
+!/output/movielens/model_fits/IMR_I_tune.rds
+!/output/movielens/model_fits/IMR_IXZ_tune.rds
