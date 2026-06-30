@@ -14,7 +14,7 @@
 To fully reproduce the MovieLens results, execute the scripts in the following order.
 
 ### 1. Model Fitting
-- **`1_fit_MovieLens_models.R`**: Fits the proposed IMR methods (IMR-I and IMR-IXZ) as well as the `SoftImpute` and `MCAI` models. All outputs are saved to `output/movielens/model_fits/`.
+- **`1_fit_MovieLens.R`**: Fits the proposed IMR methods (IMR-I and IMR-IXZ) as well as the `SoftImpute` and `MCAI` models. All outputs are saved to `output/movielens/model_fits/`.
 
 
 ### 2. Deep Learning Method (Glocal-K)
@@ -52,7 +52,7 @@ There are two implementations of the GLocal-K model on the MovieLens dataset. Ru
 ## Running the analysis:
 Make sure you are in the project root directory and that all requirements are installed.
 ```bash
-Rscript 1_fit_MovieLens_models.R
+Rscript 1_fit_MovieLens.R
 Rscript 2_1_prepare_python_data.R
 python code/movielens/2_2_GlocalK_torch.py  
 #or

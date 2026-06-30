@@ -31,20 +31,20 @@ source("R/Bixi/1_generate_train_test_splits.R")
 
 ### Step 2: Fit the BKTR Model 
 ```r
-source("R/Bixi/2_fit_BKTR.R")
+source("code/Bixi/2_fit_BKTR.R")
 ```
 *    Individual model fits are saved in `output/Bixi/model_fits/BKTR_all_fits/`.
 The aggregated results dataframe is saved to `output/Bixi/results_bktr.rds`.
 
 ### Step 3: Fit the IMR Models
 ```r
-source("R/Bixi/3_fit_IMR.R")
+source("code/Bixi/3_fit_IMR.R")
 ```
 *  Saves the aggregated results table to `output/Bixi/results_imr.rds`.
 
 ### Step 4: Generate the Results Table
 ```r
-source("R/Bixi/4_generate_results_table.R")
+source("code/Bixi/4_generate_results_table.R")
 ```
 * reads the saved results and generates (prints) the latex code for Table 2. 
 

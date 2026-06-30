@@ -33,7 +33,7 @@ For more details, see the README files inside each directory:
 - [`data/README.md`](data/README.md)
 - [`output/README.md`](output/README.md)
 - [`code/simulation/README.md`](code/simulation/README.md)
-- [`code/bixi/README.md`](code/bixi/README.md)
+- [`code/Bixi/README.md`](code/Bixi/README.md)
 - [`code/movielens/README.md`](code/movielens/README.md)
 
 ## Prerequisites

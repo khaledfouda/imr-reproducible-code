@@ -84,7 +84,7 @@ res <- res %>%
     rank_gamma = if_else(model == "IMR-I", 1, rank_gamma)
   ) |>
   rbind(
-    read.csv("./output/movielens/model_fits/glocalk_results_tensorflow.csv")
+    read.csv("./output/movielens/model_fits/glocalk_results.csv")
   ) %>%
   mutate(across(where(is.numeric), ~ round(.x, 3))) %>%
   mutate(rank_total = rank_m +

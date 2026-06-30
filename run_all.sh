@@ -33,16 +33,16 @@ echo ""
 echo "========== 2. Bixi Application =========="
 
 echo "  [1/4] Generating train/test splits (1_generate_train_test_splits.R)..."
-Rscript ./code/bixi/1_generate_train_test_splits.R
+Rscript ./code/Bixi/1_generate_train_test_splits.R
 
 echo "  [2/4] Fitting BKTR models (2_fit_BKTR.R)..."
-Rscript ./code/bixi/2_fit_BKTR.R
+Rscript ./code/Bixi/2_fit_BKTR.R
 
 echo "  [3/4] Fitting IMR models (3_fit_IMR.R)..."
-Rscript ./code/bixi/3_fit_IMR.R
+Rscript ./code/Bixi/3_fit_IMR.R
 
 echo "  [4/4] Generating results table (4_generate_results_table.R)..."
-Rscript ./code/bixi/4_generate_results_table.R
+Rscript ./code/Bixi/4_generate_results_table.R
 
 echo "  -> Bixi complete. Outputs in output/Bixi/"
 
@@ -50,8 +50,8 @@ echo "  -> Bixi complete. Outputs in output/Bixi/"
 echo ""
 echo "========== 3. MovieLens Application =========="
 
-echo "  [1/4] Fitting R-based models (1_fit_MovieLens_models.R)..."
-Rscript ./code/movielens/1_fit_MovieLens_models.R
+echo "  [1/4] Fitting R-based models (1_fit_MovieLens.R)..."
+Rscript ./code/movielens/1_fit_MovieLens.R
 
 echo "  [2/4] Preparing data for GLocal-K (2_1_prepare_python_data.R)..."
 Rscript ./code/movielens/2_1_prepare_python_data.R
