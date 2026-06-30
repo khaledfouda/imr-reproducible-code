@@ -352,7 +352,7 @@ change settings for a single script, edit its `config_default.R`.
 Approximate time needed to reproduce the analyses on a standard desktop machine:
 
 - [ ] < 1 minute
-- [ ] 1-10 minutes
+- [x] 1-10 minutes
 - [ ] 10-60 minutes
 - [ ] 1-8 hours
 - [x] > 8 hours

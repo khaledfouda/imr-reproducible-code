@@ -1,6 +1,7 @@
 # Reproducibility Materials for "Incomplete Matrix Regression"
 
-This repository contains the reproduciblity materials for the paper "Incomplete Matrix Regression". The package for the method can be found at [khaledfouda/IMR](https://github.com/khaledfouda/IMR).
+This repository contains the reproduciblity materials for the paper "Incomplete Matrix Regression".
+The package for the method can be found at [khaledfouda/IMR](https://github.com/khaledfouda/IMR).
 
 
 
@@ -18,7 +19,7 @@ Matrix completion seeks to recover a low-rank matrix from a sparse and noisy sub
 ├── run_all.sh                 # reproduce all results with the full (paper) settings
 ├── run_all_lite.sh            # fast test with less replications (numbers will NOT match the paper)
 ├── helper.sh                  # configuration helpers used by the run_all scripts
-├── IMR_package.zip            # Source code of the IMR R package
+├── IMR-1.0.0.tar              # Source code of the IMR R package
 ├── code/
 │   ├── simulation/            # Simulation study  
 │   ├── Bixi/                  # Bixi application    
@@ -62,9 +63,8 @@ install.packages(c(
 install.packages("remotes")
 remotes::install_github("khaledfouda/IMR", build_vignettes = TRUE)
 # or install it from the local zip file (not updated regularly)
-# (make sure IMR_package.zip is in the working directory)
-#install.packages("IMR_package.zip", repos = NULL, type = "source")
-
+# (make sure IMR-1.0.0.tar is in the working directory)
+#install.packages("./IMR-1.0.0.tar", repos = NULL, type="source")
 ```
 
 ### Python Packages (for GLocal-K only)
