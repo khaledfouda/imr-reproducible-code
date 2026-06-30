@@ -393,3 +393,7 @@ results_df = pd.DataFrame({
 out_path = './output/movielens/model_fits/glocalk_results_tensorflow.csv'
 results_df.to_csv(out_path, index=False)
 print("Results saved to {}".format(out_path))
+
+out_path = './output/movielens/model_fits/glocalk_results.csv'
+results_df.to_csv(out_path, index=False)
+print("Results saved to {}".format(out_path))

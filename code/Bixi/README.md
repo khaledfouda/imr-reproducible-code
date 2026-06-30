@@ -24,7 +24,7 @@ Total estimated time is 4 days.
 
 ### Step 1: Generate Train/Test Splits
 ```r
-source("R/Bixi/1_generate_train_test_splits.R")
+source("code/Bixi/1_generate_train_test_splits.R")
 ```
 *  Creates missing data scenarios across 50 replications at various training proportions (55% to 75%).
 *    Generates 300 `.rds` data split files saved in `data/Bixi/train_test_splits/`.
