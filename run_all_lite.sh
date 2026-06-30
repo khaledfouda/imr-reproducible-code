@@ -1,11 +1,11 @@
 #!/bin/bash
 # ============================================================================
-# Reproduction Script for:
+# A lite and faster version of the reproduction Script for:
 #   "Incomplete Matrix Regression"
 #
 # Usage:
-#   chmod +x run_all.sh
-#   ./run_all.sh
+#   chmod +x run_all_lite.sh
+#   ./run_all_lite.sh
 #
 # ============================================================================
 
@@ -21,10 +21,10 @@ echo "============================================"
 source ./helper.sh
 
 # Define the variables
-set_simulation_reps 500
-set_bixi_splits 50
+set_simulation_reps 2
+set_bixi_splits 2
 set_movielens_cv FALSE
-set_glocalk_epochs 20 30 500 1000
+set_glocalk_epochs 2 3 5 10
 
 
 # ---------- 1. Simulation Study ----------

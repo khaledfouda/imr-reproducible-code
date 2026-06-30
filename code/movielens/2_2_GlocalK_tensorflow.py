@@ -39,6 +39,13 @@ iter_p = 50  # max iterations per L-BFGS-B call for pretraining
 iter_f = 10  # max iterations per L-BFGS-B call for finetuning
 epoch_p = 20 # number of pretraining epochs (outer loops)
 epoch_f = 30 # number of finetuning epochs (outer loops)
+
+try:
+    import config
+    if hasattr(config, 'epoch_p'): epoch_p = config.epoch_p
+    if hasattr(config, 'epoch_f'): epoch_f = config.epoch_f
+except ImportError:
+    pass
 dot_scale = 0.5 # dot product weight for global kernel
 
 

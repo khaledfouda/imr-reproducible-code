@@ -7,9 +7,11 @@
 .Ruserdata
 *.rds
 *.dat
-!/output/Bixi/results_bktr.rds
-!/output/Bixi/results_imr.rds
-!data/Simulation/*
+#!/output/Bixi/results_bktr.rds
+#!/output/Bixi/results_imr.rds
+#!data/Simulation/*
 !data/movielens/*
 #!/output/movielens/*
-!/output/Simulation/*
+#!/output/Simulation/*
+*.rds
+/output/simulation

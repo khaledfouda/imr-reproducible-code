@@ -1,0 +1,1 @@
+NUM_SPLITS <- 2

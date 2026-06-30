@@ -3,6 +3,14 @@ require(magrittr)
 library(IMR)
 require(kableExtra)
 require(RSSthemes)
+
+#------------------------------------------------------------------------------
+seed <- 2025
+# configurations >>
+source("./code/movielens/config_default.R")
+if (file.exists("./code/movielens/config.R")) {
+  source("./code/movielens/config.R")
+}
 # ===== loading and preparing the data ===============
 # ===== out:   X, Z, Y, query, test.idx, test.truths, obs_mask
 # =============================================================

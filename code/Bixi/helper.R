@@ -11,7 +11,10 @@ library(BKTR)
 #------------------------------------------------------------------------------
 # configurations >>
 TRAIN_SEQ <- seq(55, 75, 5)
-NUM_SPLITS <- 50
+source("./code/Bixi/config_default.R")
+if (file.exists("./code/Bixi/config.R")) {
+  source("./code/Bixi/config.R")
+}
 
 
 
