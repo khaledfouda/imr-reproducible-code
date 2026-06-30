@@ -17,12 +17,12 @@ missing_pct = 0.8
 all_res <- data.frame()
 grid <- IMR::imr_tune_grid(rank = c(2, 10, 1, 2), beta = 0, nuclear = c(0,40,40,2))
 print(grid)
-
+mcci_params <- data.frame()
 for(b in 1:NUM_REPLICATIONS){
   seed = 2025 + b
   set.seed(seed)
   for(d in dims){
-    
+
     # generate simulated data and define the data s3 object in IMR
     n = m = d
     dat <-
@@ -31,10 +31,10 @@ for(b in 1:NUM_REPLICATIONS){
                               shared = FALSE,
                               seed = seed)
     mdat <- IMR::imr_data(Y = dat$Y, X = dat$X, seed = seed, val_prop = 0.2);
-    
-    
+
+
     # fit the 3 models: softimpute -> IMR -> MCCI
-    
+
     fitsi <- simpute.cv(y_full = mdat$Y,
                         y_train = mdat$y_train,
                         y_valid = mdat$y_valid,
@@ -46,22 +46,31 @@ for(b in 1:NUM_REPLICATIONS){
                         thresh = CONVERGENCE$thresh,
                         test_error = get_metric("rmse"),
                         seed = seed)
-    
+
     fitimr <- IMR::imr_tune(mdat, grid, convergence=CONVERGENCE, fast_nuclear = FALSE,
                             seed = seed, n_cores = 7, verbose = 0)
-    
-    
-    fitmcci <- MCCI.cv(Y = dat$Y, X = dat$X, W = dat$mask, n_folds = 5,numCores = 9,
+
+    # note, for MCCI, the cross-validation always chose lambda_1=0 (no penalty on the covariate coefficients)
+    # and alpha=1 (pure nuclear norm on the low-rank matrix); the value of the nuclear norm penalty itself
+    # is lambda_2. so we set the grid on lambda_2 only.
+    fitmcci <- MCCI.cv(Y = dat$Y,
+                       X = dat$X,
+                       W = dat$mask,
+                       n_folds = 5,
+                       numCores = 9,
                        seed = seed,
                        test_error = get_metric("rmse"),
-                       lambda_1_grid = c(0),#seq(0, 1, length = 10),
-                       lambda_2_grid = seq(2.9, 0, length = 20),
-                       alpha_grid = c(1),#seq(0.992, 1, length = 10),
+                       lambda_1_grid = c(0), #seq(0, 1, length = 30),
+                       lambda_2_grid = seq(0.9, 0.1, length = 30),
+                       alpha_grid = c(1),#seq(0.992, 1, length = 30),
                        n1n2_optimized = TRUE,
                        return_diagn = FALSE)
-    #--- 
-    # compute the results summary fromt the 3 models. MCCI -> IMR -> SImpute
-    
+    #---
+    # print the optimal parameters for MCCI for diagnostics/choose the best grid.
+     mcci_params <- rbind(mcci_params ,
+                          as.data.frame(fitmcci$best_parameters) %>% mutate(d =d ))
+    # compute the results summary from the 3 models. MCCI -> IMR -> SImpute
+
     test_true <- dat$theta[dat$mask == 0]
     train_pred <- fitmcci$fit$estimates[dat$mask == 1]
     test_pred <- fitmcci$fit$estimates[dat$mask == 0]
@@ -73,12 +82,12 @@ for(b in 1:NUM_REPLICATIONS){
       mutate(beta_rrmse = evaluate(fitmcci$fit$beta, dat$beta, "rrmse"),
              M_rrmse = evaluate(fitmcci$fit$M, dat$M, "rrmse")) ->
       mcci_out
-    
+
 
     test_mask <- dat$mask == 0
     test_mask <- as_incomplete(test_mask)
     reconst <- reconstruct(fitimr$fit, mdat, FALSE)
-    
+
     train_pred <- reconstruct_partial(fitimr$fit, mdat, mdat$Y@i, mdat$Y@p)
     test_pred <- reconstruct_partial(fitimr$fit, mdat, test_mask@i, test_mask@p)
     evaluate_estimates(mdat$Y@x, train_pred,
@@ -89,7 +98,7 @@ for(b in 1:NUM_REPLICATIONS){
       mutate(beta_rrmse = evaluate(reconst$beta, dat$beta, "rrmse"),
              M_rrmse = evaluate(reconst$M, dat$M, "rrmse")) ->
       imr_out
-    
+
     e <- fitsi$fit
     estimates <- e$u %*% (t(e$v) * e$d)
     train_pred <- estimates[dat$mask == 1]
@@ -100,7 +109,7 @@ for(b in 1:NUM_REPLICATIONS){
                        model = "SI") %>%
       mutate(beta_rrmse = NA, M_rrmse = NA) ->
       si_out
-    
+
     # append the results to the results table.
     rbind(mcci_out, imr_out, si_out) %>%
       mutate(dim = d,
@@ -108,7 +117,7 @@ for(b in 1:NUM_REPLICATIONS){
       result
     all_res <- rbind(all_res, result)
   }
-  # after each replication, print a summary of the result + save them to disk. 
+  # after each replication, print a summary of the result + save them to disk.
   print(b)
   all_res %>%
     group_by(model, dim) %>%
@@ -117,7 +126,13 @@ for(b in 1:NUM_REPLICATIONS){
     select(model, dim, test_rrmse_m, test_rrmse_s, rank_m) %>%
     arrange(dim, test_rrmse_m) %>%
     print()
-  
+
+  # mcci_params %>%
+  #   group_by(d) %>%
+  #   summarize_all(function(x) paste0(mean(x), "@", sd(x))) %>%
+  #   as.data.frame() %>%
+  #   print()
+
   rw_a_file("results_scenario_1.rds",
             data = all_res,
             file_override = TRUE,
@@ -156,6 +171,8 @@ q = 5;
 r = 5;
 missing_pct = seq(.7, .98, .05)
 all_res <- res <- data.frame()
+
+
 for(b in 1:NUM_REPLICATIONS){
   seed = 2025 + b
   start1 = Sys.time()
@@ -207,7 +224,7 @@ for(b in 1:NUM_REPLICATIONS){
                        M = reconst$M,
                        model = "IMR") %>%
       mutate(lambda_m = fitimr$params$lambda_m,
-             rank_in = fitimr$params$rank_in,) %>%
+             rank_in = fitimr$params$rank_in) %>%
       mutate(beta_rrmse = evaluate(reconst$beta, dat$beta, "rrmse"),
              gamma_rrmse = evaluate(reconst$gamma, dat$gamma, "rrmse"),
              M_rrmse = evaluate(reconst$M, dat$M, "rrmse"),
@@ -241,6 +258,7 @@ for(b in 1:NUM_REPLICATIONS){
     
   }
   all_res %>%
+    mutate(missing_pct = round(missing_pct,2)) %>%
     group_by(model, missing_pct) %>%
     summarize_all(c(m=mean,s=sd)) %>%
     as.data.frame() %>%
