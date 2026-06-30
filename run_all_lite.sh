@@ -11,7 +11,7 @@
 
 
 echo "============================================"
-echo " IMR Reproduction Pipeline"
+echo " IReproduction of Results in IMR"
 echo " Started at: $(date)"
 echo "============================================"
 

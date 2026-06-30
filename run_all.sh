@@ -9,10 +9,9 @@
 #
 # ============================================================================
 
-set -e  # Exit immediately on any error
 
 echo "============================================"
-echo " IMR Reproduction Pipeline"
+echo " Reproduction of Results in IMR"
 echo " Started at: $(date)"
 echo "============================================"
 

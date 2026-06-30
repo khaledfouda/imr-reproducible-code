@@ -8,11 +8,7 @@ This directory contains the necessary R scripts to fully reproduce the Bixi bike
 It requires fitting 250 model variations, with each fit taking approximately 22 minutes on an m4 cpu core.
 Total estimated time is 4 days.
 
-The number of replications is controlled by `NUM_SPLITS`, defined in `config_default.R`
-(full setting: 50) and loaded by `helper.R`. To reduce computation time, lower this
-value in `config_default.R` (or create a `config.R` in this folder that sets
-`NUM_SPLITS`, which overrides the default). The repository-level `run_all_lite.sh`
-script does this automatically for a fast test.
+To run fewer splits, lower `NUM_SPLITS` in `config_default.R`.
 
 
 **Packages:**

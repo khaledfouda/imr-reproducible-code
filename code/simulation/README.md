@@ -13,11 +13,8 @@
 To fully reproduce the simulation results, execute the scripts in the following order.
 
 
-Running the full simulation (`1_simulations.R`) is computationally intensive because it fits multiple models (IMR, Soft-Impute, MCCI) 
-across 500 replications for 4 dimension settings. 
-The number of replications is controlled by `NUM_REPLICATIONS`, defined in `config_default.R` (full setting: 500) and loaded by `helper.R`.
-To reduce computation time, lower this value in `config_default.R` (or create a `config.R` in this folder that sets `NUM_REPLICATIONS`, 
-which overrides the default). The repository-level `run_all_lite.sh` script does this automatically for a fast end-to-end test.
+The full simulation fits IMR, Soft-Impute, and MCCI across 500 replications for 4
+dimension settings. To run fewer, lower `NUM_REPLICATIONS` in `config_default.R`.
 
 ### 1. Run the Simulations
 - **`1_simulations.R`**: Runs the simulations for all settings. Generates three `.rds` result files (dataframes) saved to `output/simulation/`:

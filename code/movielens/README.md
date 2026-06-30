@@ -16,11 +16,9 @@ To fully reproduce the MovieLens results, execute the scripts in the following o
 ### 1. Model Fitting
 - **`1_fit_MovieLens.R`**: Fits the proposed IMR methods (IMR-I and IMR-IXZ) as well as the `SoftImpute` and `MCAI` models. All outputs are saved to `output/movielens/model_fits/`.
 
-- **Configuration (`config.R`):** The variable `run_cross_validation` (defined in `config_default.R`, default `FALSE`, loaded by `helper.R`) 
-controls hyperparameter selection. When `FALSE`, the script uses the fixed optimal hyperparameters reported
-in the paper; when `TRUE`, it re-runs cross-validation to select them. It's recommended to leave it as `FALSE`.
-To override the default, create a `config.R` in this folder that sets
-`run_cross_validation`.
+- **Configuration:** `run_cross_validation` in `config_default.R` (default `FALSE`)
+controls hyperparameter selection. `FALSE` uses the fixed hyperparameters from the
+paper; `TRUE` re-runs cross-validation. Leave it `FALSE`.
 
 
 ### 2. Deep Learning Method (Glocal-K)
@@ -35,13 +33,10 @@ There are two implementations of the GLocal-K model on the MovieLens dataset. Ru
     - torch
     - numpy, scipy, pandas
 
-- **Configuration (`config.py`):** Both GLocal-K scripts read the number of training
-epochs from an optional `config.py` in this folder (`epoch_p`, `epoch_f` for the
-TensorFlow script; `max_epoch_p`, `max_epoch_f` for the PyTorch script). If `config.py`
-is absent, the scripts use the epoch counts set by the authors. The repository-level
-`run_all_lite.sh` generates a `config.py` with small epoch counts for a quick test.
- Each implementation writes the results to `output/movielens/model_fits/glocalk_results.csv`
-(read by `3_generate_results_table.R`) in addition to its own named output file.
+- **Configuration:** Both scripts read epoch counts from an optional `config.py`
+(`epoch_p`, `epoch_f`, `iter_p`, `iter_f` for TensorFlow; `max_epoch_p`, `max_epoch_f`
+for PyTorch); without it they use the authors' defaults. Each writes its results to
+`output/movielens/model_fits/glocalk_results.csv`, read by `3_generate_results_table.R`.
 
 **Option 2 (Original Implementation. Matches reported results):**
 - **`2_2_GlocalK_tensorflow.py`:** This is the original implementation by the authors (https://github.com/usydnlp/Glocal_K/tree/main). However, it requires TensorFlow 1.15 and Python 3.7, and hence must be run inside a Docker container. We provide instructions for creating the Docker container and running the script inside it. It has been tested on macOS and Linux. For Windows, we recommend using WSL: https://learn.microsoft.com/en-us/windows/wsl/install.

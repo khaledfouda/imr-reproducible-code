@@ -107,30 +107,18 @@ chmod +x run_all.sh
 
 ### Quick run (`run_all_lite.sh`)
 
-Because the full analysis can take several days, we also provide `run_all_lite.sh`,
-a fast test that runs the entire pipeline end to end in less time
-using a reduced replications. Its results will not match the numbers
-reported in the paper as it is intended only to confirm that the code runs in a
-given environment.
+The full analysis takes days. `run_all_lite.sh` runs the whole analysis with reduced
+settings (less iterations and replications) in about 7 minutes (Apple M4 core). It only checks that the code runs. However, the
+numbers will not match the paper.
 
 ```bash
 chmod +x run_all_lite.sh
 ./run_all_lite.sh
 ```
 
-### How run settings are configured
+### Configuration
 
-The confiugrations of each analysis is controlled by configuration files in each
-`code/` subfolder:
-
-- `config_default.R` holds the full (paper) settings. Each script loads this file first.
-- An optional `config.R` (and `config.py` for the GLocal-K Python script) overrides
-  those defaults if present; it is loaded after `config_default.R`.
-
-`run_all.sh` and `run_all_lite.sh` both `source helper.sh` and call its setter
-functions (`set_simulation_reps`, `set_bixi_config`, `set_movielens_config`,
-`set_glocalk_epochs`) to generate these `config.R`/`config.py` override files
-before running — `run_all.sh` writes the full settings, `run_all_lite.sh` writes
-the reduced ones. To change settings for a individual script run, edit the
-relevant `config_default.R` (or create a `config.R`); the `config.R`/`config.py`
-files are generated artifacts and can be deleted to fall back to the defaults.
+Each `code/` subfolder has a `config_default.R` with the paper settings, loaded by
+every script. The run scripts source `helper.sh` to write `config.R` (and `config.py`)
+override files: `run_all.sh` writes the full settings, `run_all_lite.sh` the reduced
+ones. To change settings for a single script, edit its `config_default.R`.
