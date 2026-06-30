@@ -6,7 +6,6 @@ This repository contains the reproduciblity materials for the paper "Incomplete 
 
 > **Incomplete Matrix Regression**
 > Khaled Fouda, Aurélie Labbe, and Karim Oualkacha
-> *Submitted to the Journal of the American Statistical Association (JASA)*
 
 ## Abstract
 
@@ -67,7 +66,7 @@ install.packages("remotes")
 remotes::install_github("khaledfouda/IMR", build_vignettes = TRUE)
 # or install it from the local zip file (not updated regularly)
 # (make sure IMR_package.zip is in the working directory)
-install.packages("IMR_package.zip", repos = NULL, type = "source")
+#install.packages("IMR_package.zip", repos = NULL, type = "source")
 
 ```
 
