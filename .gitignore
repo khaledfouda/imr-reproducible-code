@@ -10,10 +10,8 @@
 *.pdf
 *.csv
 output
-!data/movielens/*
 */__pycache__/*
 *.pyc
 config.R
 config.py
-*.rds
-
+!data/movielens/raw/*
