@@ -40,6 +40,16 @@ For more details, see the README files inside each directory:
 - [`code/Bixi/README.md`](code/Bixi/README.md)
 - [`code/movielens/README.md`](code/movielens/README.md)
 
+## Which scripts produce which results
+
+| Paper element | Script | Output |
+|---|---|---|
+| Table 1 (simulation) | `code/simulation/2_tables_plots.R` | LaTeX printed to console |
+| Figures 1 & 2 (simulation) | `code/simulation/2_tables_plots.R` | `output/simulation/figure_1_scenario_2.pdf`, `figure_2_scenario_2.pdf` |
+| Table 2 (movielens) | `code/movielens/3_generate_results_table.R` | LaTeX printed to console |
+| Figure 3 (movielens) | `code/movielens/3_generate_results_table.R` | `output/movielens/plot_full_model.pdf` |
+| Table 3 (Bixi) | `code/Bixi/4_generate_results_table.R` | LaTeX printed to console |
+
 ## Prerequisites
 
 ### Software
@@ -62,7 +72,7 @@ install.packages(c(
 
 install.packages("remotes")
 remotes::install_github("khaledfouda/IMR", build_vignettes = TRUE)
-# or install it from the local zip file (not updated regularly)
+# or install it from the local zip file
 # (make sure IMR-1.0.0.tar is in the working directory)
 #install.packages("./IMR-1.0.0.tar", repos = NULL, type="source")
 ```

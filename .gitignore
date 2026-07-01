@@ -11,7 +11,7 @@
 *.csv
 output
 !data/movielens/*
-*/__pycahce__/*
+*/__pycache__/*
 *.pyc
 config.R
 config.py

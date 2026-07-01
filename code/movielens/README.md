@@ -57,7 +57,7 @@ for PyTorch); without it they use the authors' defaults. Each writes its results
     
 
 ### 3. Result Generation
-- **`3_generate_results_table.R`**: Once all model fits have been saved to disk, run this script. It reads the files from `output/movielens/model_fits/` and generates the results tables and plot shown in the manuscript. All final artifacts are written to `output/movielens/`.
+- **`3_generate_results_table.R`**: Once all model fits have been saved to disk, run this script. It reads the files from `output/movielens/model_fits/`, prints the LaTeX code for the MovieLens results table, and saves the fitted-ratings boxplot to `output/movielens/plot_full_model.pdf`. (See the script-to-result mapping in the top-level `README.md` for the corresponding manuscript Table/Figure numbers.)
 
 ## Running the analysis:
 Make sure you are in the project root directory and that all requirements are installed.

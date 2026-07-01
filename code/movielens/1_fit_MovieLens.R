@@ -26,10 +26,7 @@ model_data <- update(model_data,
 )
 model_data
 
-# no need to set grid limits since we decided on the max values
-# grid <- imr_set_grid_limits(model_data, grid,default_rank = 10,
-#                             bisection_iter = 5,
-#                             convergence=convergence, verbose=2)
+# Grid limits are not set here; we use the predetermined maximum values.
 
 if (run_cross_validation) {
   imrxz_cv <- IMR::imr_tune(model_data, grid,
@@ -80,10 +77,7 @@ model_data <- update(model_data,
 )
 model_data
 
-# no need to set grid limits since we decided on the max values
-# grid <- imr_set_grid_limits(model_data, grid,default_rank = 10,
-#                             bisection_iter = 5,
-#                             convergence=convergence, verbose=2)
+# Grid limits are not set here; we use the predetermined maximum values.
 if (run_cross_validation) {
   imri_cv <- IMR::imr_tune(model_data, grid,
     final_fit = FALSE,

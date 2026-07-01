@@ -127,12 +127,6 @@ for(b in 1:NUM_REPLICATIONS){
     arrange(dim, test_rrmse_m) %>%
     print()
 
-  # mcci_params %>%
-  #   group_by(d) %>%
-  #   summarize_all(function(x) paste0(mean(x), "@", sd(x))) %>%
-  #   as.data.frame() %>%
-  #   print()
-
   rw_a_file("results_scenario_1.rds",
             data = all_res,
             file_override = TRUE,

@@ -115,7 +115,15 @@ A data dictionary provides information that allows users to understand the meani
 OPTIONAL: Provide any additional details that would be helpful in understanding the data. If relevant, please provide unique identifier/DOI/version information and/or license/terms of use.
 -->
 
-The MovieLens license information: https://files.grouplens.org/datasets/movielens/ml-1m-README.txt 
+The preprocessed MovieLens 1M files (`Movie_Y`, `Movie_X`, `Movie_Q`, `movies_Z`) are
+taken as-is from the supplementary material of Ma et al. (2025); we did not modify
+them. The original MovieLens 1M data set comes from https://grouplens.org/datasets/movielens/1m/. 
+
+Ma, S., Niu, P. Y., Zhang, Y., & Zhu, Y. (2025). Statistical Inference for Noisy Matrix
+Completion Incorporating Auxiliary Information. Journal of the American Statistical
+Association, 120(549), 343–355. https://doi.org/10.1080/01621459.2024.2335591
+
+The MovieLens license information: https://files.grouplens.org/datasets/movielens/ml-1m-README.txt
 Citation: F. Maxwell Harper and Joseph A. Konstan. 2015. The MovieLens Datasets: History
 and Context. ACM Transactions on Interactive Intelligent Systems (TiiS) 5, 4,
 Article 19 (December 2015), 19 pages. DOI=http://dx.doi.org/10.1145/2827872
@@ -177,11 +185,11 @@ List key software used here. Include version numbers if not otherwise documented
 For example: R version 4.5.1
 -->
 
-- R (>= 4.1),
+- R version 4.6.0 ,
 and one of the following:
-- Python (>= 3.10):  for the PyTorch GLocal-K implementation
+- Python version 3.12.11  for the PyTorch GLocal-K implementation
 or
-- Python 3.7 with TensorFlow 1.15.5 and Docker: for the original GLocal-K implementation (run inside a Docker container)
+- Python version 3.7 with TensorFlow 1.15.5 and Docker: for the original GLocal-K implementation (run inside a Docker container)
 
 #### Libraries and dependencies used by the code
 
@@ -317,10 +325,8 @@ Describe how to use the materials provided to reproduce analyses in the manuscri
 
 Full instructions are provided in the repository's `README.md`. In summary:
 
-1. Install R (>= 4.1) and the required R packages (listed in `README.md`).
-2. Install Python (>= 3.10) and the required Python packages (`torch`, `numpy`, `scipy`, `pandas`) for the GLocal-K model.
-3. Install the `IMR` package from the provided zip file or from GitHub.
-4. From the repository root directory, run the master script:
+1. Install R, Python, and the required packages.
+2. From the repository root directory, run the script:
 
 ```bash
 chmod +x run_all.sh
@@ -339,7 +345,7 @@ Individual analyses can also be run independently; see the README files in each 
  To use the original TensorFlow 1 implementation (which matches the reported results), Docker is required.
  See `code/movielens/README.md` for Docker build and run instructions.
 
-`run_all_lite.sh` runs the whole analysis with reduced settings in about 7 minutes.
+`run_all_lite.sh` runs the whole analysis with reduced settings (few replications and iterations) in about 7 minutes.
 It only checks that the code runs; its results do not match the paper.
 
 Each `code/` subfolder has a `config_default.R` with the paper settings, loaded by
@@ -376,7 +382,8 @@ for checking that the code runs (results do not match the paper).
 OPTIONAL: Additional documentation provided (e.g., R package vignettes, demos or other examples) that show how to use the provided code/software in other settings.
 -->
 
-The `IMR` R package includes a vignette that demonstrates the method on example data. The vignette can be accessed after installation via `vignette("IMR")` in R.
+The `IMR` R package includes a vignette that demonstrates the method on example data. 
+The vignette can be accessed after installation via `vignette("IMR")` in R.
 
 # Notes (optional)
 
