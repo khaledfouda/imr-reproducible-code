@@ -25,7 +25,7 @@ generate_simulated_data <- function(
   shared = FALSE,
   snr = 1,
   mechanism = c("mcar", "mar"),
-  mar_strength = 1,
+  mar_strength = 0.25,
   identified = FALSE,
   row_intercept = FALSE,
   col_intercept = FALSE,
