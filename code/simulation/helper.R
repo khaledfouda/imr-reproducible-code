@@ -8,7 +8,7 @@ library(RSSthemes)
 #------------------------------------------------------------------------------
 
 
-source("./code/simulation/config_default.R")
+#source("./code/simulation/config_default.R")
 if (file.exists("./code/simulation/config.R")) {
   source("./code/simulation/config.R")
 }
