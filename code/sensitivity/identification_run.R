@@ -50,8 +50,10 @@ source("./code/sensitivity/runner.R")
 # Settings ----
 cfg <- list(
   n = 600, m = 600, p = 3, q = 3, r = 4,
-  signals = 1:10,                 # seeds of the signals
-  reps = 10,                      # replications of each signal
+  # The errors vary far more between signals than between the replications
+  # of a signal: many signals, few replications of each.
+  signals = 1:25,                 # seeds of the signals
+  reps = 4,                       # replications of each signal
   snr = c(0.5, 1, 3, 10),    # scenario "noise": sd(theta) / sd(noise)
   missing = c(0.1, 0.3, 0.5, 0.7, 0.9),   # scenario "missingness"
   snr_base = 3,                   # SNR of the scenario "missingness"
@@ -63,11 +65,8 @@ cfg <- list(
   n_workers = 8,
   out_dir = "./output/sensitivity"
 )
-# draft: some of the signals and replications of the full run
-if (size == "draft") {
-  cfg$signals <- 1:5
-  cfg$reps <- 4
-}
+# draft: the first signals of the full run
+if (size == "draft") cfg$signals <- 1:5
 if (size == "lite") {
   cfg$n <- 200
   cfg$m <- 200
@@ -102,11 +101,18 @@ followed <- function(parts, cfg) {
   return(c(parts$beta[, cfg$cols], parts$gamma[cfg$rows, ]))
 }
 
-# RRMSE: ||a - b||_F / ||b - mean(b)||_F, where mean(b) is the mean of all
-# the entries of b. Its square is 1 - R^2: the share of the variation of b
-# that a does not reproduce.
+# The typical size of a coefficient of beta and of Gamma: the root mean
+# square of the entries of the matrix, repeated for each followed
+# coefficient of that matrix.
+typical_size <- function(parts) {
+  sizes <- c(beta = sqrt(mean(parts$beta^2)),
+    gamma = sqrt(mean(parts$gamma^2)))
+  return(unname(sizes[coef_index$component]))
+}
+
+# RRMSE, as in the paper: ||a - b||_F / ||b||_F
 rel_err <- function(a, b) {
-  return(sqrt(sum((a - b)^2) / sum((b - mean(b))^2)))
+  return(sqrt(sum((a - b)^2) / sum(b^2)))
 }
 
 # Data ----
@@ -168,12 +174,17 @@ fit_cell <- function(signal, rep, snr, missing, identified, cfg) {
   id <- reconstruct(imr_identify(out$fit, out$data), out$data, trace = FALSE)
 
   unobs <- d$mask == 0
+  # squared error of the fitted matrix
+  total <- sum((raw$estimates - d$theta)^2)
   row <- data.frame(
     signal = signal, rep = rep, snr = snr, missing = missing,
     identified = identified, obs_rate = mean(d$mask),
     # fitted matrix: all entries, and the unobserved ones
     theta_all = rel_err(raw$estimates, d$theta),
     theta_unobs = rel_err(raw$estimates[unobs], d$theta[unobs]),
+    # 1 - R^2 of the fitted matrix: its squared error over the variation of
+    # theta around its mean
+    one_minus_r2 = total / sum((d$theta - mean(d$theta))^2),
     # check: the identification step leaves the fitted matrix unchanged
     theta_same = rel_err(id$estimates, raw$estimates)
   )
@@ -195,7 +206,6 @@ fit_cell <- function(signal, rep, snr, missing, identified, cfg) {
 
   # Shares of the squared error of the fitted matrix that the identified
   # beta, Gamma and M carry. The three parts are orthogonal: they sum to 1.
-  total <- sum((raw$estimates - d$theta)^2)
   row$share_beta <- sum((d$X %*% (id$beta - truth$beta))^2) / total
   row$share_gamma <- sum(tcrossprod(id$gamma - truth$gamma, d$Z)^2) / total
   row$share_M <- sum((id$M - truth$M)^2) / total
@@ -237,8 +247,9 @@ run_replication <- function(task, cfg) {
 
 # Truth ----
 # What no fit is needed for, in each version of the truth of a signal: the
-# gap between every generating component and its part of T(theta), and the
-# two values of the followed coefficients.
+# gap between every generating component and its part of T(theta); and, for
+# the followed coefficients, their two values and the typical size of a
+# coefficient of their matrix.
 describe_truth <- function(signal, identified, cfg) {
   d <- make_data(signal, 1, cfg$snr_base, cfg$missing_base, identified, cfg)
   truth <- d$identified_truth
@@ -252,7 +263,8 @@ describe_truth <- function(signal, identified, cfg) {
     ),
     coefs = cbind(
       signal = signal, identified = identified, coef_index,
-      gen = followed(d, cfg), T_theta = followed(truth, cfg)
+      gen = followed(d, cfg), T_theta = followed(truth, cfg),
+      size_gen = typical_size(d), size_T = typical_size(truth)
     )
   ))
 }

@@ -6,13 +6,15 @@
 #   Rscript code/sensitivity/identification_results.R         (draft or full)
 #   Rscript code/sensitivity/identification_results.R lite    (the test run)
 #
-# One row of the results is one fit. An error is an RRMSE,
-# ||estimate - target||_F / ||target - mean(target)||_F, whose square is
-# 1 - R^2. The errors are named <component>_<estimate>_<target>:
+# One row of the results is one fit. An error is the RRMSE of the paper,
+# ||estimate - target||_F / ||target||_F. The errors are named
+# <component>_<estimate>_<target>:
 #   component: beta, gamma or M;
 #   estimate : raw (as the algorithm returns it) or id (identified);
 #   target   : gen (the generating component) or T (its part of T(theta)).
 # <component>_raw_id is the distance between the two estimates.
+# one_minus_r2 is 1 - R^2 of the fitted matrix: its squared error over the
+# variation of theta around its mean.
 #
 # The fits of a signal are first averaged over its replications. The tables
 # and the figures then give the mean over the signals, with its standard
@@ -98,9 +100,15 @@ show("Fits",
      ))
 
 # Errors ----
-show("Fitted matrix (all entries, unobserved entries) and M: mean (SE)",
+show("Fitted matrix (all entries, unobserved entries, 1 - R^2): mean (SE)",
      by_cell %>% summarise(
-       across(c(theta_all, theta_unobs, M_raw_gen, M_id_gen, M_id_T), mean_se),
+       across(c(theta_all, theta_unobs, one_minus_r2), mean_se),
+       .groups = "drop"
+     ))
+
+show("M: mean (SE)",
+     by_cell %>% summarise(
+       across(c(M_raw_gen, M_id_gen, M_raw_T, M_id_T), mean_se),
        .groups = "drop"
      ))
 
@@ -150,40 +158,37 @@ show("Checks: largest value over all fits",
 # Followed coefficients ----
 # For each followed coefficient of each signal, in each cell and for each
 # estimate: the mean and the standard deviation of the estimate over the
-# replications, as percentages of the true value. The true value is the
-# generating one (gen), or the one in T(theta) (T).
-#   error_gen, error_T: 100 * (mean estimate - true value) / true value;
-#   sd                : 100 * sd(estimate) / |generating value|;
-#   truth_T           : where T(theta) is, 100 * (T - gen) / gen.
+# replications, in % of the typical size of a coefficient. That size is the
+# root mean square of the entries of the true matrix (size_gen for the
+# generating one, size_T for the one in T(theta)), so the RRMSE is the root
+# mean square of such errors over all the coefficients of the matrix.
+#   error_gen: 100 * (mean estimate - generating value) / size_gen;
+#   error_T  : 100 * (mean estimate - value in T(theta)) / size_T;
+#   sd       : 100 * sd(estimate) / size_gen;
+#   truth_T  : where T(theta) is, 100 * (T - gen) / size_gen.
 by_coef <- results$coefs %>%
   left_join(results$truth$coefs, by = c("signal", "identified", "coef")) %>%
   pivot_longer(c(raw, id), names_to = "estimate", values_to = "value") %>%
   group_by(signal, identified, snr, missing, component, coef, estimate, gen,
-           T_theta) %>%
+           T_theta, size_gen, size_T) %>%
   summarise(mean = mean(value), sd = sd(value), .groups = "drop") %>%
   mutate(
-    error_gen = 100 * (mean - gen) / gen,
-    error_T = 100 * (mean - T_theta) / T_theta,
-    sd = 100 * sd / abs(gen),
-    truth_T = 100 * (T_theta - gen) / gen,
+    error_gen = 100 * (mean - gen) / size_gen,
+    error_T = 100 * (mean - T_theta) / size_T,
+    sd = 100 * sd / size_gen,
+    truth_T = 100 * (T_theta - gen) / size_gen,
     estimate = factor(estimate, levels = c("raw", "id"),
                       labels = c("Raw", "Identified"))
   )
 
-# A percentage of the true value means little when that value is near zero:
-# only the coefficients whose true value is at least min_true in absolute
-# value are used below.
-min_true <- 0.25
-
-# Medians over the followed coefficients of all the signals.
-show("Followed coefficients, in % of the true value: medians",
+# Means over the followed coefficients of all the signals.
+show("Followed coefficients, in % of the typical size of a coefficient",
      stack_scenarios(by_coef) %>%
        group_by(scenario, truth, level, component, estimate) %>%
        summarise(
-         abs_error_gen = median(abs(error_gen[abs(gen) >= min_true])),
-         abs_error_T = median(abs(error_T[abs(T_theta) >= min_true])),
-         sd = median(sd[abs(gen) >= min_true]),
-         coefficients = sum(abs(gen) >= min_true), .groups = "drop"
+         abs_error_gen = mean(abs(error_gen)),
+         abs_error_T = mean(abs(error_T)), sd = mean(sd),
+         coefficients = n(), .groups = "drop"
        ))
 
 # Figures ----
@@ -254,14 +259,14 @@ save_figure(error_figure("Missingness", "Missing entries (%)",
 
 # The followed coefficients of the first signal in the cell (snr_base,
 # missing_base). For each coefficient: the error against the generating
-# value, in % of that value, with +/- 1 standard deviation over the
-# replications. The cross is where T(theta) is: at zero when the truth
-# satisfies the conditions.
+# value, in % of the typical size of a coefficient, with +/- 1 standard
+# deviation over the replications. The cross is where T(theta) is: at zero
+# when the truth satisfies the conditions.
 base_coefs <- by_coef %>%
   filter(signal == cfg$signals[1], snr == cfg$snr_base,
-         missing == cfg$missing_base, abs(gen) >= min_true) %>%
-  group_by(component, identified) %>%
-  mutate(position = match(coef, sort(unique(coef)))) %>%
+         missing == cfg$missing_base) %>%
+  group_by(component) %>%
+  mutate(position = coef - min(coef) + 1) %>%
   ungroup() %>%
   mutate(truth = label_truth(identified),
          component = factor(component, levels = c("beta", "gamma"),
@@ -279,7 +284,7 @@ coef_figure <- ggplot(base_coefs, aes(position, error_gen, color = estimate,
   facet_grid(component ~ truth, scales = "free_y",
              labeller = labeller(component = label_parsed)) +
   labs(x = "Followed coefficient",
-       y = "Estimate minus true value (% of the true value)",
+       y = "Estimate minus true value (% of the typical coefficient size)",
        color = NULL, shape = NULL) +
   theme_paper
 save_figure(coef_figure, "figure_sens_ident_coefs", width = 12, height = 7)
