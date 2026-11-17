@@ -3,15 +3,16 @@
 # Question: can the coefficients that the algorithm returns (raw) be read as
 # they are, or only after the identification step (identified)?
 #
-# The signal is drawn once: X, Z, beta, Gamma, A and B. It has two versions
+# A signal is X, Z, beta, Gamma, A and B, drawn once. It has two versions
 # with the same X, Z and beta:
 #   conditions hold    : the components satisfy (C1)-(C3);
 #   conditions violated: the components as generated, which do not.
 # T(theta) is the decomposition of theta that satisfies the conditions: the
 # generating one in the first version, another one in the second.
 #
-# One replication draws the noise and the mask, and fits both versions in
-# every cell of two scenarios:
+# The raw estimates depend a lot on the signal, so several signals are
+# drawn. One replication of a signal draws the noise and the mask, and fits
+# both versions in every cell of two scenarios:
 #   noise      : the missing rate is fixed and the SNR varies;
 #   missingness: the SNR is fixed and the missing rate varies.
 # The cells of a replication share the standard normal noise, which the SNR
@@ -23,7 +24,7 @@
 #   OPENBLAS_NUM_THREADS=1 Rscript code/sensitivity/identification_run.R draft
 #   OPENBLAS_NUM_THREADS=1 Rscript code/sensitivity/identification_run.R full
 # A run that is stopped and started again continues where it stopped: each
-# replication has its own result file. Tables and figures:
+# replication of each signal has its own result file. Tables and figures:
 # identification_results.R.
 
 size <- commandArgs(trailingOnly = TRUE)[1]
@@ -43,14 +44,15 @@ for (e in parse("./code/simulation/helper.R")) {
   if (is_generator) eval(e)
 }
 
-# run_tasks() and collect_tasks(): parallel workers, one result file per task
+# run_tasks(): parallel workers, one result file per task
 source("./code/sensitivity/runner.R")
 
 # Settings ----
 cfg <- list(
   n = 600, m = 600, p = 3, q = 3, r = 4,
-  signal_seed = 1,                # seed of X, Z, beta, Gamma, A and B
-  snr = c(0.2, 0.5, 1, 3, 10),    # scenario "noise": sd(theta) / sd(noise)
+  signals = 1:10,                 # seeds of the signals
+  reps = 10,                      # replications of each signal
+  snr = c(0.5, 1, 3, 10),    # scenario "noise": sd(theta) / sd(noise)
   missing = c(0.1, 0.3, 0.5, 0.7, 0.9),   # scenario "missingness"
   snr_base = 3,                   # SNR of the scenario "missingness"
   missing_base = 0.3,             # missing rate of the scenario "noise"
@@ -58,16 +60,21 @@ cfg <- list(
   beta_grid = 0, gamma_grid = 0,
   val_prop = 0.2, thresh = 1e-6, maxit = 2000,
   n_followed = 6,   # columns of beta, and rows of Gamma, followed one by one
-  reps = 100, n_workers = 8,
+  n_workers = 8,
   out_dir = "./output/sensitivity"
 )
-if (size == "draft") cfg$reps <- 20
+# draft: some of the signals and replications of the full run
+if (size == "draft") {
+  cfg$signals <- 1:5
+  cfg$reps <- 4
+}
 if (size == "lite") {
   cfg$n <- 200
   cfg$m <- 200
+  cfg$signals <- 1:2
+  cfg$reps <- 2
   cfg$snr <- c(0.5, 3)
   cfg$missing <- c(0.3, 0.7)
-  cfg$reps <- 2
   cfg$n_workers <- 2
   cfg$out_dir <- "./output/sensitivity_lite"
 }
@@ -76,18 +83,18 @@ if (Sys.getenv("OPENBLAS_NUM_THREADS") != "1") {
 }
 
 # The coefficients followed one by one: all of beta in a few columns and all
-# of Gamma in a few rows, drawn once. coef_index names them in the order in
-# which followed() returns them.
-set.seed(cfg$signal_seed)
+# of Gamma in a few rows, drawn once and the same in every signal.
+# coef_index names them in the order in which followed() returns them.
+set.seed(1)
 cfg$cols <- sort(sample(cfg$m, cfg$n_followed))
 cfg$rows <- sort(sample(cfg$n, cfg$n_followed))
 coef_index <- rbind(
   data.frame(component = "beta",
-             covariate = rep(seq_len(cfg$p), times = cfg$n_followed),
-             unit = rep(cfg$cols, each = cfg$p)),
+    covariate = rep(seq_len(cfg$p), times = cfg$n_followed),
+    unit = rep(cfg$cols, each = cfg$p)),
   data.frame(component = "gamma",
-             covariate = rep(seq_len(cfg$q), each = cfg$n_followed),
-             unit = rep(cfg$rows, times = cfg$q))
+    covariate = rep(seq_len(cfg$q), each = cfg$n_followed),
+    unit = rep(cfg$rows, times = cfg$q))
 )
 coef_index$coef <- seq_len(nrow(coef_index))
 
@@ -95,21 +102,23 @@ followed <- function(parts, cfg) {
   return(c(parts$beta[, cfg$cols], parts$gamma[cfg$rows, ]))
 }
 
-# Relative error ||a - b||_F / ||b||_F
+# RRMSE: ||a - b||_F / ||b - mean(b)||_F, where mean(b) is the mean of all
+# the entries of b. Its square is 1 - R^2: the share of the variation of b
+# that a does not reproduce.
 rel_err <- function(a, b) {
-  return(sqrt(sum((a - b)^2) / sum(b^2)))
+  return(sqrt(sum((a - b)^2) / sum((b - mean(b))^2)))
 }
 
 # Data ----
-# The data set of one cell. The signal depends on cfg$signal_seed and on
-# `identified` only; the noise and the mask depend on the replication, and
-# have seeds of their own. The generator returns theta, its generating
-# components and T(theta) (`identified_truth`).
-make_data <- function(rep, snr, missing, identified, cfg) {
+# The data set of one cell. The signal depends on `signal` and `identified`
+# only. `draw` is the seed of the noise and of the mask, which have seeds of
+# their own. The generator returns theta, its generating components and
+# T(theta) (`identified_truth`).
+make_data <- function(signal, draw, snr, missing, identified, cfg) {
   return(generate_simulated_data(
     n = cfg$n, m = cfg$m, r = cfg$r, p = cfg$p, q = cfg$q,
     sparsity = missing, snr = snr, identified = identified,
-    seed = cfg$signal_seed, seed_noise = rep, seed_mask = 1e6 + rep
+    seed = signal, seed_noise = draw, seed_mask = 1e6 + draw
   ))
 }
 
@@ -129,14 +138,17 @@ conditions <- function(parts, d) {
 }
 
 
-# rep = 1; snr = 3; missing = 0.7; identified = FALSE;
+# signal = 1; rep = 1; snr = 3; missing = 0.7; identified = FALSE;
 
 # One fit ----
-# One cell of one replication: the tuning run, then the raw and the
-# identified estimates against the generating components and against
+# One cell of one replication of one signal: the tuning run, then the raw
+# and the identified estimates against the generating components and against
 # T(theta). Returns the row of results and the followed coefficients.
-fit_cell <- function(rep, snr, missing, identified, cfg) {
-  d <- make_data(rep, snr, missing, identified, cfg)
+fit_cell <- function(signal, rep, snr, missing, identified, cfg) {
+  # one number per signal and replication: the seed of the noise, of the
+  # mask and of the validation split
+  draw <- 1000 * (signal - 1) + rep
+  d <- make_data(signal, draw, snr, missing, identified, cfg)
   truth <- d$identified_truth
 
   # lambda_m is tuned on a validation set; the rank is fixed
@@ -145,9 +157,9 @@ fit_cell <- function(rep, snr, missing, identified, cfg) {
     d$Y, d$X, d$Z,
     center = FALSE, scale = TRUE, val_prop = cfg$val_prop,
     grid = imr_tune_grid(beta = cfg$beta_grid, gamma = cfg$gamma_grid,
-                         rank = cfg$r),
+      rank = cfg$r),
     maxit = cfg$maxit, thresh = cfg$thresh,
-    n_cores = 1, seed = rep, verbose = 0
+    n_cores = 1, seed = draw, verbose = 0
   ))
   secs <- as.numeric(Sys.time() - start, units = "secs")
 
@@ -155,14 +167,13 @@ fit_cell <- function(rep, snr, missing, identified, cfg) {
   raw <- reconstruct(out$fit, out$data, trace = FALSE)
   id <- reconstruct(imr_identify(out$fit, out$data), out$data, trace = FALSE)
 
-  err2 <- (raw$estimates - d$theta)^2
   unobs <- d$mask == 0
   row <- data.frame(
-    rep = rep, snr = snr, missing = missing, identified = identified,
-    obs_rate = mean(d$mask),
+    signal = signal, rep = rep, snr = snr, missing = missing,
+    identified = identified, obs_rate = mean(d$mask),
     # fitted matrix: all entries, and the unobserved ones
-    theta_all = sqrt(sum(err2) / sum(d$theta^2)),
-    theta_unobs = sqrt(sum(err2[unobs]) / sum(d$theta[unobs]^2)),
+    theta_all = rel_err(raw$estimates, d$theta),
+    theta_unobs = rel_err(raw$estimates[unobs], d$theta[unobs]),
     # check: the identification step leaves the fitted matrix unchanged
     theta_same = rel_err(id$estimates, raw$estimates)
   )
@@ -184,10 +195,10 @@ fit_cell <- function(rep, snr, missing, identified, cfg) {
 
   # Shares of the squared error of the fitted matrix that the identified
   # beta, Gamma and M carry. The three parts are orthogonal: they sum to 1.
-  row$share_beta <- sum((d$X %*% (id$beta - truth$beta))^2) / sum(err2)
-  row$share_gamma <- sum(tcrossprod(id$gamma - truth$gamma, d$Z)^2) /
-    sum(err2)
-  row$share_M <- sum((id$M - truth$M)^2) / sum(err2)
+  total <- sum((raw$estimates - d$theta)^2)
+  row$share_beta <- sum((d$X %*% (id$beta - truth$beta))^2) / total
+  row$share_gamma <- sum(tcrossprod(id$gamma - truth$gamma, d$Z)^2) / total
+  row$share_M <- sum((id$M - truth$M)^2) / total
 
   row$lambda_m <- out$fit$meta$lambdas[["M"]]
   row$rank_fit <- sum(out$fit$coefficients$d > 0)
@@ -196,16 +207,18 @@ fit_cell <- function(rep, snr, missing, identified, cfg) {
   row$secs <- secs
 
   coefs <- data.frame(
-    rep = rep, snr = snr, missing = missing, identified = identified,
-    coef = coef_index$coef, raw = followed(raw, cfg), id = followed(id, cfg)
+    signal = signal, rep = rep, snr = snr, missing = missing,
+    identified = identified, coef = coef_index$coef,
+    raw = followed(raw, cfg), id = followed(id, cfg)
   )
   return(list(row = row, coefs = coefs))
 }
 
 # One replication ----
-# Both versions of the truth in every cell of the two scenarios. The cell
-# (snr_base, missing_base) belongs to both scenarios and is fitted once.
-run_replication <- function(rep, cfg) {
+# `task` names a signal and one of its replications. Both versions of the
+# truth are fitted in every cell of the two scenarios. The cell (snr_base,
+# missing_base) belongs to both scenarios and is fitted once.
+run_replication <- function(task, cfg) {
   cells <- unique(rbind(
     data.frame(snr = cfg$snr, missing = cfg$missing_base),
     data.frame(snr = cfg$snr_base, missing = cfg$missing)
@@ -213,8 +226,8 @@ run_replication <- function(rep, cfg) {
   # no common column: every cell with each version of the truth
   cells <- merge(cells, data.frame(identified = c(TRUE, FALSE)))
   fits <- lapply(seq_len(nrow(cells)), function(i) {
-    return(fit_cell(rep, cells$snr[i], cells$missing[i],
-                    cells$identified[i], cfg))
+    return(fit_cell(task$signal, task$rep, cells$snr[i], cells$missing[i],
+      cells$identified[i], cfg))
   })
   return(list(
     rows = dplyr::bind_rows(lapply(fits, `[[`, "row")),
@@ -223,38 +236,43 @@ run_replication <- function(rep, cfg) {
 }
 
 # Truth ----
-# What no fit is needed for, in each version of the truth: the gap between
-# every generating component and its part of T(theta), and the two values of
-# the followed coefficients.
-describe_truth <- function(identified, cfg) {
-  d <- make_data(1, cfg$snr_base, cfg$missing_base, identified, cfg)
+# What no fit is needed for, in each version of the truth of a signal: the
+# gap between every generating component and its part of T(theta), and the
+# two values of the followed coefficients.
+describe_truth <- function(signal, identified, cfg) {
+  d <- make_data(signal, 1, cfg$snr_base, cfg$missing_base, identified, cfg)
   truth <- d$identified_truth
   return(list(
     facts = data.frame(
-      identified = identified, sd_theta = sd(d$theta), rank_theta = d$rank,
+      signal = signal, identified = identified,
+      sd_theta = sd(d$theta), rank_theta = d$rank,
       gap_beta = rel_err(truth$beta, d$beta),
       gap_gamma = rel_err(truth$gamma, d$gamma),
       gap_M = rel_err(truth$M, d$M)
     ),
     coefs = cbind(
-      identified = identified, coef_index,
+      signal = signal, identified = identified, coef_index,
       gen = followed(d, cfg), T_theta = followed(truth, cfg)
     )
   ))
 }
 
 # Run ----
-# One task per replication; the seed of a replication is its number.
-tasks <- as.list(seq_len(cfg$reps))
-names(tasks) <- sprintf("rep_%04d", seq_len(cfg$reps))
+# One task per signal and replication.
+tasks <- expand.grid(rep = seq_len(cfg$reps), signal = cfg$signals)
+tasks <- split(tasks, sprintf("signal_%02d_rep_%02d", tasks$signal, tasks$rep))
 task_dir <- file.path(cfg$out_dir, "identification")
 run_tasks(tasks, run_replication, task_dir, cfg$n_workers, cfg = cfg)
 
-collected <- collect_tasks(task_dir)
-truths <- lapply(c(TRUE, FALSE), describe_truth, cfg = cfg)
+# The results of these tasks only: the folder may hold the files of a run
+# with other settings.
+files <- file.path(task_dir, paste0(names(tasks), ".rds"))
+done <- lapply(files[file.exists(files)], readRDS)
+truths <- Map(describe_truth, signal = rep(cfg$signals, each = 2),
+  identified = c(TRUE, FALSE), MoreArgs = list(cfg = cfg))
 results <- list(
-  rows = collected$rows,
-  coefs = dplyr::bind_rows(collected$extra),
+  rows = dplyr::bind_rows(lapply(done, `[[`, "rows")),
+  coefs = dplyr::bind_rows(lapply(done, `[[`, "extra")),
   truth = list(
     facts = dplyr::bind_rows(lapply(truths, `[[`, "facts")),
     coefs = dplyr::bind_rows(lapply(truths, `[[`, "coefs"))

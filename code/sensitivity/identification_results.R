@@ -6,13 +6,17 @@
 #   Rscript code/sensitivity/identification_results.R         (draft or full)
 #   Rscript code/sensitivity/identification_results.R lite    (the test run)
 #
-# One row of the results is one fit. The errors are relative,
-# ||estimate - target||_F / ||target||_F, and are named
-# <component>_<estimate>_<target>:
+# One row of the results is one fit. An error is an RRMSE,
+# ||estimate - target||_F / ||target - mean(target)||_F, whose square is
+# 1 - R^2. The errors are named <component>_<estimate>_<target>:
 #   component: beta, gamma or M;
 #   estimate : raw (as the algorithm returns it) or id (identified);
 #   target   : gen (the generating component) or T (its part of T(theta)).
 # <component>_raw_id is the distance between the two estimates.
+#
+# The fits of a signal are first averaged over its replications. The tables
+# and the figures then give the mean over the signals, with its standard
+# error or the standard deviation over the signals.
 library(dplyr)
 library(tidyr)
 library(ggplot2)
@@ -25,10 +29,16 @@ results <- readRDS(file.path(out_dir, "results_identification.rds"))
 cfg <- results$config
 
 # Helpers ----
-# "mean (Monte Carlo standard error)" of a column, as text
+# "mean (standard error)" of a column, as text
 mean_se <- function(x, digits = 4) {
   return(sprintf("%.*f (%.*f)", digits, mean(x), digits,
                  sd(x) / sqrt(length(x))))
+}
+
+# "mean [smallest, largest]" of a column, as text
+mean_range <- function(x, digits = 3) {
+  return(sprintf("%.*f [%.*f, %.*f]", digits, mean(x), digits, min(x),
+                 digits, max(x)))
 }
 
 # print a table under its title
@@ -60,19 +70,31 @@ stack_scenarios <- function(data) {
   ))
 }
 
-# Signal ----
-# gap: the distance from a generating component to its part of T(theta).
+# Signals ----
+# gap: the RRMSE of a generating component against its part of T(theta).
 # The identified estimate cannot be closer than that to the generating one.
-show("The two versions of the signal", results$truth$facts)
+show("The signals: mean [smallest, largest] over the signals",
+     results$truth$facts %>% group_by(identified) %>%
+       summarise(
+         signals = n(),
+         across(c(sd_theta, gap_beta, gap_gamma, gap_M), mean_range),
+         .groups = "drop"
+       ))
 
 # Fits ----
-by_cell <- stack_scenarios(results$rows) %>% group_by(scenario, truth, level)
+# One row per signal and cell: the means over the replications of the
+# signal. The tables below are means over the signals.
+by_signal <- stack_scenarios(results$rows) %>%
+  group_by(scenario, truth, identified, level, signal) %>%
+  summarise(across(c(where(is.numeric), converged), mean), fits = n(),
+            .groups = "drop")
+by_cell <- by_signal %>% group_by(scenario, truth, level)
 
 show("Fits",
      by_cell %>% summarise(
-       fits = n(), converged = mean(converged), iterations = mean(n_iter),
-       lambda_m = mean(lambda_m), rank = mean(rank_fit),
-       seconds = mean(secs), .groups = "drop"
+       signals = n(), fits = sum(fits), converged = mean(converged),
+       iterations = mean(n_iter), lambda_m = mean(lambda_m),
+       rank = mean(rank_fit), seconds = mean(secs), .groups = "drop"
      ))
 
 # Errors ----
@@ -126,31 +148,42 @@ show("Checks: largest value over all fits",
      ))
 
 # Followed coefficients ----
-# For each followed coefficient, cell and estimate, over the replications:
-# the bias and the root mean squared error against the generating value
-# (gen) and against the value in T(theta) (T), and the standard deviation.
+# For each followed coefficient of each signal, in each cell and for each
+# estimate: the mean and the standard deviation of the estimate over the
+# replications, as percentages of the true value. The true value is the
+# generating one (gen), or the one in T(theta) (T).
+#   error_gen, error_T: 100 * (mean estimate - true value) / true value;
+#   sd                : 100 * sd(estimate) / |generating value|;
+#   truth_T           : where T(theta) is, 100 * (T - gen) / gen.
 by_coef <- results$coefs %>%
-  left_join(results$truth$coefs, by = c("identified", "coef")) %>%
+  left_join(results$truth$coefs, by = c("signal", "identified", "coef")) %>%
   pivot_longer(c(raw, id), names_to = "estimate", values_to = "value") %>%
-  group_by(identified, snr, missing, component, coef, estimate) %>%
-  summarise(
-    bias_gen = mean(value - gen), bias_T = mean(value - T_theta),
-    rmse_gen = sqrt(mean((value - gen)^2)),
-    rmse_T = sqrt(mean((value - T_theta)^2)),
-    gap = mean(T_theta - gen), sd = sd(value), reps = n(), .groups = "drop"
-  ) %>%
-  mutate(estimate = factor(estimate, levels = c("raw", "id"),
-                           labels = c("Raw", "Identified")))
+  group_by(signal, identified, snr, missing, component, coef, estimate, gen,
+           T_theta) %>%
+  summarise(mean = mean(value), sd = sd(value), .groups = "drop") %>%
+  mutate(
+    error_gen = 100 * (mean - gen) / gen,
+    error_T = 100 * (mean - T_theta) / T_theta,
+    sd = 100 * sd / abs(gen),
+    truth_T = 100 * (T_theta - gen) / gen,
+    estimate = factor(estimate, levels = c("raw", "id"),
+                      labels = c("Raw", "Identified"))
+  )
 
-# Averages over the followed coefficients. se_bias is the Monte Carlo
-# standard error of one bias, sd / sqrt(replications).
-show("Followed coefficients: mean absolute bias, mean RMSE and mean sd",
+# A percentage of the true value means little when that value is near zero:
+# only the coefficients whose true value is at least min_true in absolute
+# value are used below.
+min_true <- 0.25
+
+# Medians over the followed coefficients of all the signals.
+show("Followed coefficients, in % of the true value: medians",
      stack_scenarios(by_coef) %>%
        group_by(scenario, truth, level, component, estimate) %>%
        summarise(
-         abs_bias_gen = mean(abs(bias_gen)), abs_bias_T = mean(abs(bias_T)),
-         rmse_gen = mean(rmse_gen), rmse_T = mean(rmse_T),
-         sd = mean(sd), se_bias = mean(sd / sqrt(reps)), .groups = "drop"
+         abs_error_gen = median(abs(error_gen[abs(gen) >= min_true])),
+         abs_error_T = median(abs(error_T[abs(T_theta) >= min_true])),
+         sd = median(sd[abs(gen) >= min_true]),
+         coefficients = sum(abs(gen) >= min_true), .groups = "drop"
        ))
 
 # Figures ----
@@ -166,10 +199,10 @@ save_figure <- function(figure, name, width, height) {
 }
 
 # Error on beta and on Gamma against the level of a scenario: mean and
-# +/- 1 standard deviation over the replications. One line for each
-# estimate (identified, raw) against each target (identified truth,
-# generating coefficients). With a truth that satisfies the conditions the
-# two targets are the same, so each estimate has one line there.
+# +/- 1 standard deviation over the signals. One line for each estimate
+# (identified, raw) against each target (identified truth, generating
+# coefficients). With a truth that satisfies the conditions the two targets
+# are the same, so each estimate has one line there.
 line_labels <- c(
   id_T = "Identified estimate vs. identified truth",
   id_gen = "Identified estimate vs. generating coefficients",
@@ -180,7 +213,7 @@ line_colors <- setNames(
   c(signif_blue, signif_orange, signif_green, signif_red), line_labels
 )
 line_shapes <- setNames(c(16, 17, 18, 15), line_labels)
-curves <- stack_scenarios(results$rows) %>%
+curves <- by_signal %>%
   pivot_longer(matches("^(beta|gamma)_(id|raw)_(T|gen)$"),
                names_to = c("component", "line"),
                names_pattern = "^(beta|gamma)_(.*)$", values_to = "error") %>%
@@ -219,32 +252,34 @@ save_figure(error_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
             "figure_sens_ident_missing", width = 12, height = 7)
 
-# The followed coefficients in the cell (snr_base, missing_base). For each
-# coefficient: the mean of (estimate - generating value) over the
-# replications, with +/- 1 standard deviation. The cross is the value in
-# T(theta) minus the generating value: it is at zero when the truth
+# The followed coefficients of the first signal in the cell (snr_base,
+# missing_base). For each coefficient: the error against the generating
+# value, in % of that value, with +/- 1 standard deviation over the
+# replications. The cross is where T(theta) is: at zero when the truth
 # satisfies the conditions.
 base_coefs <- by_coef %>%
-  filter(snr == cfg$snr_base, missing == cfg$missing_base) %>%
-  group_by(component) %>%
-  mutate(position = coef - min(coef) + 1) %>%
+  filter(signal == cfg$signals[1], snr == cfg$snr_base,
+         missing == cfg$missing_base, abs(gen) >= min_true) %>%
+  group_by(component, identified) %>%
+  mutate(position = match(coef, sort(unique(coef)))) %>%
   ungroup() %>%
   mutate(truth = label_truth(identified),
          component = factor(component, levels = c("beta", "gamma"),
                             labels = c("beta", "Gamma")))
 dodge <- position_dodge(width = 0.6)
-coef_figure <- ggplot(base_coefs, aes(position, bias_gen, color = estimate,
+coef_figure <- ggplot(base_coefs, aes(position, error_gen, color = estimate,
                                       shape = estimate)) +
   geom_hline(yintercept = 0, linewidth = 0.3) +
-  geom_point(aes(y = gap), color = "black", shape = 4, size = 2) +
-  geom_errorbar(aes(ymin = bias_gen - sd, ymax = bias_gen + sd), width = 0,
+  geom_point(aes(y = truth_T), color = "black", shape = 4, size = 2) +
+  geom_errorbar(aes(ymin = error_gen - sd, ymax = error_gen + sd), width = 0,
                 position = dodge) +
   geom_point(size = 2, position = dodge) +
   scale_color_manual(values = c(signif_red, signif_blue)) +
   scale_shape_manual(values = c(15, 16)) +
   facet_grid(component ~ truth, scales = "free_y",
              labeller = labeller(component = label_parsed)) +
-  labs(x = "Followed coefficient", y = "Estimate minus generating value",
+  labs(x = "Followed coefficient",
+       y = "Estimate minus true value (% of the true value)",
        color = NULL, shape = NULL) +
   theme_paper
 save_figure(coef_figure, "figure_sens_ident_coefs", width = 12, height = 7)
