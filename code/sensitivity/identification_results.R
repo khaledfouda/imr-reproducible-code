@@ -158,7 +158,7 @@ show("Followed coefficients: mean absolute bias, mean RMSE and mean sd",
 theme_paper <- theme_significance() +
   theme(legend.position = "top", legend.justification = "left",
         strip.text = element_text(face = "bold", size = 11))
-series_colors <- c(signif_blue, signif_orange, signif_red)
+legend_rows <- guide_legend(nrow = 2, byrow = TRUE)
 dir.create(file.path(out_dir, "paper"), showWarnings = FALSE)
 save_figure <- function(figure, name, width, height) {
   ggsave(file.path(out_dir, "paper", paste0(name, ".pdf")), figure,
@@ -166,19 +166,25 @@ save_figure <- function(figure, name, width, height) {
 }
 
 # Error on beta and on Gamma against the level of a scenario: mean and
-# +/- 1 standard deviation over the replications. With a truth that
-# satisfies the conditions the two targets are the same, so the line of the
-# identified estimate against the generating coefficients is left out.
+# +/- 1 standard deviation over the replications. One line for each
+# estimate (identified, raw) against each target (identified truth,
+# generating coefficients). With a truth that satisfies the conditions the
+# two targets are the same, so each estimate has one line there.
 line_labels <- c(
   id_T = "Identified estimate vs. identified truth",
   id_gen = "Identified estimate vs. generating coefficients",
+  raw_T = "Raw estimate vs. identified truth",
   raw_gen = "Raw estimate vs. generating coefficients"
 )
+line_colors <- setNames(
+  c(signif_blue, signif_orange, signif_green, signif_red), line_labels
+)
+line_shapes <- setNames(c(16, 17, 18, 15), line_labels)
 curves <- stack_scenarios(results$rows) %>%
-  pivot_longer(matches("^(beta|gamma)_(id_T|id_gen|raw_gen)$"),
+  pivot_longer(matches("^(beta|gamma)_(id|raw)_(T|gen)$"),
                names_to = c("component", "line"),
                names_pattern = "^(beta|gamma)_(.*)$", values_to = "error") %>%
-  filter(!(identified & line == "id_gen")) %>%
+  filter(!(identified & line %in% c("id_gen", "raw_T"))) %>%
   group_by(scenario, truth, component, line, level) %>%
   summarise(mean = mean(error), sd = sd(error), .groups = "drop") %>%
   mutate(line = factor(line, levels = names(line_labels),
@@ -194,9 +200,11 @@ error_figure <- function(scenario_name, x_label, x_scale) {
                 color = NA) +
     geom_line(linewidth = 1) +
     geom_point(size = 2.5) +
-    scale_color_manual(values = series_colors) +
-    scale_fill_manual(values = series_colors) +
-    scale_shape_manual(values = c(16, 17, 15)) +
+    scale_color_manual(values = line_colors) +
+    scale_fill_manual(values = line_colors) +
+    scale_shape_manual(values = line_shapes) +
+    # the legend in two rows: the identified estimate, then the raw one
+    guides(color = legend_rows, fill = legend_rows, shape = legend_rows) +
     x_scale(breaks = sort(unique(data$level))) +
     facet_grid(component ~ truth, scales = "free_y",
                labeller = labeller(component = label_parsed)) +
