@@ -3,16 +3,16 @@
 # Question: can the coefficients that the algorithm returns (raw) be read as
 # they are, or only after the identification step (identified)?
 #
-# A signal is X, Z, beta, Gamma, A and B, drawn once. It has two versions
-# with the same X, Z and beta:
+# A signal is X, Z, beta, Gamma, A and B, drawn once. The covariates are
+# centered and the model has no intercepts. A signal has two versions with
+# the same X, Z and beta:
 #   conditions hold    : the components satisfy (C1)-(C3);
 #   conditions violated: the components as generated, which do not.
 # T(theta) is the decomposition of theta that satisfies the conditions: the
 # generating one in the first version, another one in the second.
 #
-# The raw estimates depend a lot on the signal, so several signals are
-# drawn. One replication of a signal draws the noise and the mask, and fits
-# both versions in every cell of two scenarios:
+# Several signals are drawn. One replication of a signal draws the noise
+# and the mask, and fits both versions in every cell of two scenarios:
 #   noise      : the missing rate is fixed and the SNR varies;
 #   missingness: the SNR is fixed and the missing rate varies.
 # The cells of a replication share the standard normal noise, which the SNR
@@ -50,8 +50,8 @@ source("./code/sensitivity/runner.R")
 # Settings ----
 cfg <- list(
   n = 600, m = 600, p = 3, q = 3, r = 4,
-  # The errors vary far more between signals than between the replications
-  # of a signal: many signals, few replications of each.
+  # The replications of a signal differ very little: several signals, few
+  # replications of each.
   signals = 1:25,                 # seeds of the signals
   reps = 4,                       # replications of each signal
   snr = c(0.5, 1, 3, 10),    # scenario "noise": sd(theta) / sd(noise)
@@ -116,15 +116,16 @@ rel_err <- function(a, b) {
 }
 
 # Data ----
-# The data set of one cell. The signal depends on `signal` and `identified`
-# only. `draw` is the seed of the noise and of the mask, which have seeds of
-# their own. The generator returns theta, its generating components and
-# T(theta) (`identified_truth`).
+# The data set of one cell: centered covariates, no intercepts. The signal
+# depends on `signal` and `identified` only. `draw` is the seed of the noise
+# and of the mask, which have seeds of their own. The generator returns
+# theta, its generating components and T(theta) (`identified_truth`).
 make_data <- function(signal, draw, snr, missing, identified, cfg) {
   return(generate_simulated_data(
     n = cfg$n, m = cfg$m, r = cfg$r, p = cfg$p, q = cfg$q,
     sparsity = missing, snr = snr, identified = identified,
-    seed = signal, seed_noise = draw, seed_mask = 1e6 + draw
+    seed = signal, seed_noise = draw, seed_mask = 1e6 + draw,
+    centered = TRUE
   ))
 }
 
@@ -157,7 +158,8 @@ fit_cell <- function(signal, rep, snr, missing, identified, cfg) {
   d <- make_data(signal, draw, snr, missing, identified, cfg)
   truth <- d$identified_truth
 
-  # lambda_m is tuned on a validation set; the rank is fixed
+  # lambda_m is tuned on a validation set; the rank is fixed. The covariates
+  # are already centered in the data, so the fit does not center them.
   start <- Sys.time()
   out <- suppressMessages(imr(
     d$Y, d$X, d$Z,
@@ -270,10 +272,12 @@ describe_truth <- function(signal, identified, cfg) {
 }
 
 # Run ----
-# One task per signal and replication.
+# One task per signal and replication. The files go to a folder of their
+# own: identification/ holds those of earlier designs (covariates not
+# centered, intercepts).
 tasks <- expand.grid(rep = seq_len(cfg$reps), signal = cfg$signals)
 tasks <- split(tasks, sprintf("signal_%02d_rep_%02d", tasks$signal, tasks$rep))
-task_dir <- file.path(cfg$out_dir, "identification")
+task_dir <- file.path(cfg$out_dir, "identification_centered")
 run_tasks(tasks, run_replication, task_dir, cfg$n_workers, cfg = cfg)
 
 # The results of these tasks only: the folder may hold the files of a run
