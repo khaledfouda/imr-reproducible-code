@@ -23,7 +23,8 @@ generate_simulated_data <- function(
   centered = FALSE
 ) {
   mechanism <- match.arg(mechanism)
- #  checks ---------------------------------------------------
+
+  #  checks ---------------------------------------------------
   if (sparsity <= 0 || sparsity >= 1) stop("`sparsity` must be in (0, 1).")
   if (sparsity_beta < 0 || sparsity_beta > 1) stop("`sparsity_beta` must be in [0, 1].")
   if (sparsity_gamma < 0 || sparsity_gamma > 1) stop("`sparsity_gamma` must be in [0, 1].")
@@ -32,7 +33,7 @@ generate_simulated_data <- function(
   if (mechanism == "mar" && p == 0 && q == 0) stop("`mechanism = \"mar\"` needs covariates.")
   if (identified && shared) stop("`identified = TRUE` does not support shared effects.")
 
-  Random numbers -----------------------------------------------------------
+  # Random numbers -----------------------------------------------------------
   # Each component has its own seed, so two calls that differ in one argument
   # share every other component. The caller's RNG state is left as it was,
   # except for one draw when `seed` is NULL.
@@ -48,7 +49,7 @@ generate_simulated_data <- function(
   if (!is.null(seed_mask)) seeds["mask"] <- seed_mask
   if (!is.null(seed_noise)) seeds["noise"] <- seed_noise
 
-  #ovariates X and Z -------------------------------------------------------
+  # Covariates X and Z -------------------------------------------------------
   set.seed(seeds[["x"]])
   x_mat <- if (p > 0) matrix(runif(n * p), nrow = n, ncol = p) else NULL
   set.seed(seeds[["z"]])
@@ -57,7 +58,7 @@ generate_simulated_data <- function(
   if (centered && p > 0) x_mat <- sweep(x_mat, 2, colMeans(x_mat))
   if (centered && q > 0) z_mat <- sweep(z_mat, 2, colMeans(z_mat))
 
-  # Cfficient matrices -----------------------------------------------------
+  # Coefficient matrices -----------------------------------------------------
   # Row k of beta is N(mean_k, sd_k^2), with |mean_k| ~ U(0.1, 1) and
   # sd_k ~ U(0.5, 1). Column k of gamma likewise. A shared effect is the
   # vector of means.
@@ -73,7 +74,7 @@ generate_simulated_data <- function(
     }
   }
 
-  gammaat <- NULL
+  gamma_mat <- NULL
   if (q > 0) {
     set.seed(seeds[["gamma"]])
     gamma_means <- runif(q, 0.1, 1) * sample(c(-1, 1), q, replace = TRUE)
@@ -85,7 +86,7 @@ generate_simulated_data <- function(
     }
   }
 
-  # Inacte covariates (set before any projection) --------------------------
+  # Inactive covariates (set before any projection) --------------------------
   # `sparsity_beta` is the proportion of row covariates without effect: their
   # rows of beta are zero. `sparsity_gamma` likewise for the column covariates
   # and the columns of gamma. The covariates are drawn at random.
@@ -96,13 +97,13 @@ generate_simulated_data <- function(
     beta_mat[zero_b, ] <- 0
   }
 
-  if (sparsy_gamma > 0 && q > 0) {
+  if (sparsity_gamma > 0 && q > 0) {
     set.seed(seeds[["zero_gamma"]])
     zero_g <- sample(q, size = round(sparsity_gamma * q))
     if (shared) gamma_mat[zero_g, ] <- 0 else gamma_mat[, zero_g] <- 0
   }
 
-  # Intercept beta0 for the rows, gamma0 for the columns -------------------
+  # Intercepts: beta0 for the rows, gamma0 for the columns -------------------
   beta0 <- gamma0 <- NULL
   if (row_intercept) {
     set.seed(seeds[["beta0"]])
@@ -113,13 +114,13 @@ generate_simulated_data <- function(
     gamma0 <- rnorm(m)
   }
 
-  # Low-rank faors A and B, with M = A B' ----------------------------------
+  # Low-rank factors A and B, with M = A B' ----------------------------------
   set.seed(seeds[["a"]])
   a_mat <- matrix(runif(n * r, -1, 1), nrow = n, ncol = r)
   set.seed(seeds[["b"]])
   b_mat <- matrix(runif(m * r, -1, 1), nrow = m, ncol = r)
 
-  # Conditions (C-(C3) -----------------------------------------------------
+  # Conditions (C1)-(C3) -----------------------------------------------------
   # xt = [1_n, X] when the column intercepts are present, and zt = [1_m, Z]
   # when the row intercepts are, as in IMR::imr_identify(). With
   # `identified = TRUE`, A, B and [beta0, gamma] are projected so that
@@ -138,7 +139,7 @@ generate_simulated_data <- function(
     if (!is.null(qz)) b_mat <- qr.resid(qz, b_mat)
   }
 
-  # Inactive covaries with `identified = FALSE` ----------------------------
+  # Inactive covariates with `identified = FALSE` ----------------------------
   # Row k of the beta part of T(theta) is w_k' theta / w_k' w_k, where w_k is
   # the residual of covariate k on the other columns of xt. Zeroing a row of
   # beta is therefore not enough: T(theta) keeps that row at zero only if
@@ -164,7 +165,7 @@ generate_simulated_data <- function(
   }
   m_mat <- tcrossprod(a_mat, b_mat)
 
-  # Theta ------------------------------------------------------------------
+  # Theta --------------------------------------------------------------------
   theta <- m_mat
   if (p > 0 && !shared) theta <- theta + (x_mat %*% beta_mat)
   if (q > 0 && !shared) theta <- theta + (gamma_mat %*% t(z_mat))
@@ -173,7 +174,7 @@ generate_simulated_data <- function(
   if (row_intercept) theta <- theta + beta0
   if (col_intercept) theta <- sweep(theta, 2, gamma0, "+")
 
-  # Noise ------------------------------------------------------------------
+  # Noise --------------------------------------------------------------------
   # Its standard deviation is sd(theta) / snr, so snr = Inf gives no noise.
   y_mat <- theta
   if (is.finite(snr)) {
@@ -181,7 +182,7 @@ generate_simulated_data <- function(
     y_mat <- y_mat + (sd(theta) / snr) * matrix(rnorm(n * m), nrow = n, ncol = m)
   }
 
-  # Missingness mask (1 =bserved, 0 = missing) -----------------------------
+  # Missingness mask (1 = observed, 0 = missing) -----------------------------
   # Entry (i, j) is observed when u_ij < prob_ij. The uniforms u are the same
   # for every mechanism and rate, so the masks are nested in `sparsity`.
   # MCAR: prob = 1 - sparsity.
@@ -215,7 +216,7 @@ generate_simulated_data <- function(
   }
   y_mat <- y_mat * mask
 
-  # Identified truth T(thet ------------------------------------------------
+  # Identified truth T(theta) ------------------------------------------------
   # The decomposition of theta that satisfies (C1)-(C3) for xt and zt:
   #   [gamma0'; beta] = (xt' xt)^{-1} xt' theta,
   #   [beta0, gamma]  = Px_perp theta zt (zt' zt)^{-1},
@@ -243,7 +244,7 @@ generate_simulated_data <- function(
     )
   }
 
-  # Rank of theta ----------------------------------------------------------
+  # Rank of theta ------------------------------------------------------------
   # The columns of `left` span the column space of theta and those of `right`
   # its row space, so theta and the small matrix Ql' theta Qr have the same rank.
   # Ql and Qr keep the leading columns of each Q factor, a basis of the span:
@@ -255,7 +256,7 @@ generate_simulated_data <- function(
   right <- qr.Q(right)[, seq_len(right$rank), drop = FALSE]
   rank_theta <- qr(crossprod(left, theta) %*% right)$rank
 
-  #  Done :) ----------------------------------------------------------------
+  #  Done :) ------------------------------------------------------------------
   out <- list(
     theta = theta,
     mask  = mask,
@@ -270,7 +271,8 @@ generate_simulated_data <- function(
   )
 
   if (p > 0) {
-    out$X <- x_mat   out$beta <- beta_mat
+    out$X <- x_mat
+    out$beta <- beta_mat
   }
   if (q > 0) {
     out$Z <- z_mat
