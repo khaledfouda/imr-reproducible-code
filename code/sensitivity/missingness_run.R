@@ -4,8 +4,9 @@
 #   1. a complete data set with n_max rows, theta = X beta + Gamma Z' + A B'
 #      and Y = theta + noise, where conditions (C1)-(C3) hold on the n_max
 #      rows;
-#   2. four masks on it, MCAR and three MAR mechanisms of increasing
-#      strength driven by X, all drawn from the same uniforms;
+#   2. seven masks on it, all drawn from the same uniforms: MCAR, three MAR
+#      mechanisms of increasing strength driven by X, and three driven by X
+#      and Z equally;
 #   3. for each mask and each n, a fit on the first n rows, with lambda_m
 #      tuned and lambda_beta = lambda_gamma = 0.
 # The fits of a replication share everything except the mask and n. The
@@ -38,7 +39,12 @@ cfg <- list(
   n = c(200, 400, 600, 800, 1000),  # numbers of rows; the fits are nested
   m = 400, p = 4, q = 4, r = 4, snr = 3,   # q = p
   rate = 0.3,                   # mean probability that an entry is observed
-  kappa = c(0, 0.5, 0.75, 1),   # strength of the mechanism; 0 is MCAR
+  # The mechanisms: logit(prob_ij) = a0 + kappa_x * score_i + kappa_z * score_j,
+  # where score_i comes from the X of row i and score_j from the Z of column
+  # j. Both zero: MCAR. kappa_z = 0: MAR driven by X. kappa_z = kappa_x: MAR
+  # driven by X and Z equally.
+  kappa_x = c(0, 0.5, 0.75, 1, 0.25, 0.5, 0.75),
+  kappa_z = c(0, 0,   0,    0, 0.25, 0.5, 0.75),
   val_prop = 0.2, thresh = 1e-6, maxit = 2000,
   reps = 500, n_workers = 8,
   out_dir = "./output/sensitivity"
@@ -63,8 +69,8 @@ rel_err <- function(a, b) {
 # Data ----
 # The complete data set of a replication: X, Z, beta, Gamma, theta and Y
 # with n_max rows, the uniforms behind every mask, the MAR score of each
-# row, and the probability that an entry of the row is observed (one column
-# per kappa).
+# row, and the probability that each entry is observed under every
+# mechanism (a list of n_max x m matrices).
 make_data <- function(seed, cfg) {
   n_max <- max(cfg$n)
   # centered: each column of X and of Z has mean zero (X on the n_max rows).
@@ -77,24 +83,28 @@ make_data <- function(seed, cfg) {
   )
   theta <- d$theta   # X beta + Gamma Z' + A B'
 
-  # noise, direction of the MAR score and uniforms, with a seed of their own
+  # noise, direction of the row score and uniforms, with a seed of their own.
+  # The direction of the column score is drawn last, so that the draws
+  # before it do not depend on it.
   set.seed(1e6 + seed)
   sigma <- sd(theta) / cfg$snr
   noise <- matrix(rnorm(n_max * cfg$m, sd = sigma), n_max, cfg$m)
   w <- rnorm(cfg$p)
   u <- matrix(runif(n_max * cfg$m), n_max, cfg$m)
+  w_z <- rnorm(cfg$q)
 
-  # MAR: logit(prob_i) = a0 + kappa * score_i, where the score is the
-  # standardized X times a random unit vector and a0 gives mean(prob) = rate.
-  # kappa = 0 gives prob = rate in every row (MCAR).
+  # The scores are the standardized X and Z times random unit vectors. For
+  # each mechanism, a0 gives mean(prob) = rate over the n_max x m entries.
   score <- drop(scale(d$X) %*% (w / sqrt(sum(w^2))))
-  prob <- vapply(cfg$kappa, function(kappa) {
+  score_z <- drop(scale(d$Z) %*% (w_z / sqrt(sum(w_z^2))))
+  prob <- lapply(seq_along(cfg$kappa_x), function(k) {
+    logit <- outer(cfg$kappa_x[k] * score, cfg$kappa_z[k] * score_z, "+")
     a0 <- uniroot(
-      function(a) mean(plogis(a + kappa * score)) - cfg$rate,
+      function(a) mean(plogis(a + logit)) - cfg$rate,
       interval = c(-10, 10), tol = 1e-10
     )$root
-    return(plogis(a0 + kappa * score))
-  }, numeric(n_max))
+    return(plogis(a0 + logit))
+  })
 
   return(list(
     X = d$X, Z = d$Z, beta = d$beta, gamma = d$gamma, theta = theta,
@@ -103,15 +113,16 @@ make_data <- function(seed, cfg) {
 }
 
 # One fit ----
-# The first n rows under the mask of cfg$kappa[k]: the tuning run and the
-# errors, as one row of results.
+# The first n rows under mechanism k: the tuning run and the errors, as one
+# row of results.
 fit_cell <- function(d, n, k, seed, cfg) {
   rows <- seq_len(n)
   test <- seq_len(min(cfg$n))   # the rows that every size contains
   x_mat <- d$X[rows, ]
   # the first n rows of the mask of the complete data set (TRUE = observed),
   # so the masks of the different sizes are nested
-  mask <- d$u[rows, ] < d$prob[rows, k]
+  prob <- d$prob[[k]][rows, ]
+  mask <- d$u[rows, ] < prob
   # the identified truth of these rows, T(theta): beta = (X'X)^{-1} X' theta
   # and Gamma = Px_perp theta Z (Z'Z)^{-1}. They are the generated beta and
   # Gamma when X'A = 0 and X'Gamma = 0 on these rows, as at n = n_max.
@@ -119,8 +130,8 @@ fit_cell <- function(d, n, k, seed, cfg) {
   beta_t <- qr.coef(qx, d$theta[rows, ])
   gamma_t <- t(qr.coef(qr(d$Z), t(qr.resid(qx, d$theta[rows, ]))))
   cell <- data.frame(
-    seed = seed, n = n, kappa = cfg$kappa[k],
-    pi_ratio = max(d$prob[rows, k]) / min(d$prob[rows, k]),
+    seed = seed, n = n, kappa_x = cfg$kappa_x[k], kappa_z = cfg$kappa_z[k],
+    pi_ratio = max(prob) / min(prob),
     obs_rate = mean(mask),
     min_row_obs = min(rowSums(mask)), min_col_obs = min(colSums(mask)),
     # their distances to the generated beta and Gamma (Gamma: test rows)
@@ -194,7 +205,7 @@ fit_cell <- function(d, n, k, seed, cfg) {
 # Every size under every mask, on one data set.
 run_replication <- function(seed, cfg) {
   d <- make_data(seed, cfg)
-  cells <- expand.grid(n = cfg$n, k = seq_along(cfg$kappa))
+  cells <- expand.grid(n = cfg$n, k = seq_along(cfg$kappa_x))
   rows <- lapply(seq_len(nrow(cells)), function(i) {
     return(fit_cell(d, cells$n[i], cells$k[i], seed, cfg))
   })

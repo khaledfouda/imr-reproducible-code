@@ -49,26 +49,38 @@ show <- function(title, table) {
 # A fit is skipped when its mask leaves a row or column with fewer than two
 # observed entries.
 show("Fits by mechanism and status",
-     rows %>% count(kappa, status, name = "fits"))
+     rows %>% count(kappa_x, kappa_z, status, name = "fits"))
 
 # The comparisons are paired: only the replications whose fits all ran.
 rows <- rows %>% group_by(seed) %>% filter(all(status == "ok")) %>% ungroup()
 
 # Mechanisms ----
-# pi_ratio: the largest probability of observation over the smallest, on
-# all the rows. kappa = 0 is MCAR.
-mechanisms <- rows %>% filter(n == max(n)) %>% group_by(kappa) %>%
+# logit(prob_ij) = a0 + kappa_x * score_i + kappa_z * score_j. Both zero:
+# MCAR. "MAR X": driven by X only (kappa_z = 0). "MAR XZ": driven by X and Z
+# equally (kappa_z = kappa_x).
+# pi_ratio: the largest probability of observation over the smallest, and
+# obs_rate: the observed rate, both on the largest size. The fewest entries
+# in a row and in a column are taken over all the sizes.
+mechanisms <- rows %>% group_by(kappa_x, kappa_z) %>%
   summarise(
-    pi_ratio = mean(pi_ratio), obs_rate = mean(obs_rate),
-    fewest_in_a_row = min(min_row_obs), replications = n_distinct(seed)
+    pi_ratio = mean(pi_ratio[n == max(n)]),
+    obs_rate = mean(obs_rate[n == max(n)]),
+    fewest_in_a_row = min(min_row_obs),
+    fewest_in_a_column = min(min_col_obs),
+    replications = n_distinct(seed), .groups = "drop"
   ) %>%
-  mutate(mechanism = ifelse(kappa == 0, "MCAR",
-                            sprintf("MAR (%.0f)", pi_ratio)))
-show("Mechanisms, on the largest size", mechanisms)
+  arrange(kappa_z > 0, kappa_x) %>%
+  mutate(mechanism = case_when(
+    kappa_x == 0 ~ "MCAR",
+    kappa_z == 0 ~ sprintf("MAR X (%.0f)", pi_ratio),
+    TRUE ~ sprintf("MAR XZ (%.0f)", pi_ratio)
+  ))
+show("Mechanisms", mechanisms)
 
 rows <- rows %>%
-  mutate(mechanism = factor(kappa, levels = mechanisms$kappa,
-                            labels = mechanisms$mechanism))
+  left_join(select(mechanisms, kappa_x, kappa_z, mechanism),
+            by = c("kappa_x", "kappa_z")) %>%
+  mutate(mechanism = factor(mechanism, levels = mechanisms$mechanism))
 
 # Errors ----
 # Two tables for each group of errors: the errors, then the errors minus
@@ -87,8 +99,8 @@ for (group in names(error_groups)) {
          summarise(across(all_of(errors), mean_se), .groups = "drop"))
   show(paste0(group, ", difference from MCAR within a replication: mean (SE)"),
        rows %>% group_by(seed, n) %>%
-         mutate(across(all_of(errors), ~ .x - .x[kappa == 0])) %>%
-         ungroup() %>% filter(kappa > 0) %>% group_by(mechanism, n) %>%
+         mutate(across(all_of(errors), ~ .x - .x[kappa_x == 0])) %>%
+         ungroup() %>% filter(kappa_x > 0) %>% group_by(mechanism, n) %>%
          summarise(across(all_of(errors), mean_se), .groups = "drop"))
 }
 
@@ -113,9 +125,10 @@ show("Tuning and checks: means",
 
 # Figure ----
 # Error against n, one line per mechanism, for every error of the tables.
-# The panels of the paper are chosen from these later. The theme and the
-# colours are those of 4_plots.R: four steps of one hue for the ordered
-# strengths.
+# The panels of the paper are chosen from these later. The theme is that of
+# 4_plots.R. MCAR is grey; the mechanisms driven by X are three steps of
+# blue (triangles) and those driven by X and Z three steps of orange
+# (squares), from the weakest to the strongest.
 panels <- c(
   theta_all = "Fitted matrix: all entries",
   theta_unobs = "Fitted matrix: unobserved entries",
@@ -139,13 +152,15 @@ curves <- rows %>%
   summarise(mean = mean(error), .groups = "drop") %>%
   mutate(panel = factor(panel, levels = names(panels), labels = panels))
 
-strength_colors <- c("#4fbcd8", signif_blue, "#00718e", "#00485b")
+mechanism_colors <- c("grey35", "#4fbcd8", signif_blue, "#00485b",
+                      "#f9b96b", signif_orange, "#9c5200")
+mechanism_shapes <- c(16, 17, 17, 17, 15, 15, 15)
 legend_title <- expression("Mechanism" ~ (pi[max] / pi[min]) * ":")
 figure <- ggplot(curves, aes(n, mean, color = mechanism, shape = mechanism)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2.5) +
-  scale_color_manual(values = strength_colors) +
-  scale_shape_manual(values = c(16, 17, 15, 18)) +
+  scale_color_manual(values = mechanism_colors) +
+  scale_shape_manual(values = mechanism_shapes) +
   scale_x_continuous(breaks = sort(unique(curves$n))) +
   facet_wrap(~panel, scales = "free_y", ncol = 4) +
   labs(x = "Number of rows (n)", y = "RRMSE", color = legend_title,
