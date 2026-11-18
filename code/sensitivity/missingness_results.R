@@ -7,15 +7,26 @@
 #   Rscript code/sensitivity/missingness_results.R lite    (the test run)
 #
 # One row of the results is one fit. All errors are relative,
-# ||estimate - truth||_F / ||truth||_F:
-#   theta_all, theta_unobs: the fitted matrix on the first rows (the rows
-#     that every size contains), on all their entries and on the unobserved
-#     ones;
-#   beta_raw, beta_id: the raw and the identified estimates of beta.
+# ||estimate - truth||_F / ||truth||_F. The first rows are the rows that
+# every size contains.
+#   theta_all, theta_unobs: the fitted matrix on the first rows, on all
+#     their entries and on the unobserved ones;
+#   theta_low, theta_high: the same on all entries of the tenth of those
+#     rows that the MAR mechanisms observe least, and of the tenth that they
+#     observe most;
+#   beta_raw_t, beta_id_t: the raw and the identified estimates of beta,
+#     against the identified truth of the rows of the fit, T(theta). It is
+#     the generated beta at the largest size only;
+#   beta_raw, beta_id: the same estimates against the generated beta;
+#   gamma_raw_t, gamma_id_t, gamma_raw, gamma_id: the same four errors for
+#     Gamma, on the first rows;
+#   gamma_low, gamma_high: the raw Gamma against the identified truth, on
+#     the least and on the most observed tenth of the first rows.
 library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(RSSthemes)
+options(width = 200)   # the tables are wide
 
 size <- commandArgs(trailingOnly = TRUE)[1]
 out_dir <- if (identical(size, "lite")) "./output/sensitivity_lite" else
@@ -60,45 +71,67 @@ rows <- rows %>%
                             labels = mechanisms$mechanism))
 
 # Errors ----
-errors <- c("theta_all", "theta_unobs", "beta_raw", "beta_id")
-show("Errors: mean (SE)",
-     rows %>% group_by(mechanism, n) %>%
-       summarise(across(all_of(errors), mean_se), .groups = "drop"))
-
-# The same errors minus their MCAR value in the same replication and at the
-# same n. The SE is small because the fits are paired.
-show("Difference from MCAR within a replication: mean (SE)",
-     rows %>% group_by(seed, n) %>%
-       mutate(across(all_of(errors), ~ .x - .x[kappa == 0])) %>%
-       ungroup() %>% filter(kappa > 0) %>% group_by(mechanism, n) %>%
-       summarise(across(all_of(errors), mean_se), .groups = "drop"))
+# Two tables for each group of errors: the errors, then the errors minus
+# their MCAR value in the same replication and at the same n. The SE of a
+# difference is small because the fits are paired.
+error_groups <- list(
+  "Fitted matrix" = c("theta_all", "theta_unobs", "theta_low", "theta_high"),
+  "Beta" = c("beta_raw_t", "beta_id_t", "beta_raw", "beta_id"),
+  "Gamma" = c("gamma_raw_t", "gamma_id_t", "gamma_raw", "gamma_id",
+              "gamma_low", "gamma_high")
+)
+for (group in names(error_groups)) {
+  errors <- error_groups[[group]]
+  show(paste0(group, ", errors: mean (SE)"),
+       rows %>% group_by(mechanism, n) %>%
+         summarise(across(all_of(errors), mean_se), .groups = "drop"))
+  show(paste0(group, ", difference from MCAR within a replication: mean (SE)"),
+       rows %>% group_by(seed, n) %>%
+         mutate(across(all_of(errors), ~ .x - .x[kappa == 0])) %>%
+         ungroup() %>% filter(kappa > 0) %>% group_by(mechanism, n) %>%
+         summarise(across(all_of(errors), mean_se), .groups = "drop"))
+}
 
 # Tuning and checks ----
-# lambda_beta_zero: share of the fits whose selected lambda_beta is 0.
-# lambda_beta_rel: the selected value over the top of its grid.
-# beta_raw_id: relative distance between the raw and the identified beta.
-# beta_gap: relative distance between beta and the identified truth of the
-#   first n rows, (X'X)^{-1} X' theta. It is zero at the largest size, where
-#   X'A = 0. At the other sizes the identified estimate targets that truth,
-#   so this distance is part of its error against beta.
+# beta_raw_id, gamma_raw_id: relative distance between the raw and the
+#   identified estimates (Gamma: first rows).
+# beta_gap, gamma_gap: relative distance between the generated beta and
+#   Gamma and the identified truth of the first n rows, T(theta). They are
+#   zero at the largest size, where conditions (C1)-(C3) hold. At the other
+#   sizes the estimates target that truth, so these distances are part of
+#   their errors against the generated coefficients.
 show("Tuning and checks: means",
      rows %>% group_by(mechanism, n) %>%
        summarise(
-         lambda_beta_zero = mean(lambda_beta == 0),
-         lambda_beta_rel = mean(lambda_beta / lambda_beta_max),
-         beta_raw_id = mean(beta_raw_id), lambda_m = mean(lambda_m),
-         rank = mean(rank_fit), iterations = mean(n_iter),
-         converged = mean(converged), seconds = mean(secs),
-         beta_gap = mean(beta_gap),
+         lambda_m = mean(lambda_m), rank = mean(rank_fit),
+         iterations = mean(n_iter), converged = mean(converged),
+         seconds = mean(secs),
+         beta_raw_id = mean(beta_raw_id), gamma_raw_id = mean(gamma_raw_id),
+         beta_gap = mean(beta_gap), gamma_gap = mean(gamma_gap),
          .groups = "drop"
        ))
 
 # Figure ----
-# Error against n, one line per mechanism: the fitted matrix on the first
-# rows, and the identified beta. The theme and the colours are those of
-# 4_plots.R: four steps of one hue for the ordered strengths.
-panels <- c(theta_all = "Fitted matrix, first rows",
-            beta_id = "Identified coefficients")
+# Error against n, one line per mechanism, for every error of the tables.
+# The panels of the paper are chosen from these later. The theme and the
+# colours are those of 4_plots.R: four steps of one hue for the ordered
+# strengths.
+panels <- c(
+  theta_all = "Fitted matrix: all entries",
+  theta_unobs = "Fitted matrix: unobserved entries",
+  theta_low = "Fitted matrix: least observed rows",
+  theta_high = "Fitted matrix: most observed rows",
+  beta_raw_t = "Raw beta vs identified truth",
+  beta_id_t = "Identified beta vs identified truth",
+  beta_raw = "Raw beta vs generated beta",
+  beta_id = "Identified beta vs generated beta",
+  gamma_raw_t = "Raw Gamma vs identified truth",
+  gamma_id_t = "Identified Gamma vs identified truth",
+  gamma_raw = "Raw Gamma vs generated Gamma",
+  gamma_id = "Identified Gamma vs generated Gamma",
+  gamma_low = "Raw Gamma: least observed rows",
+  gamma_high = "Raw Gamma: most observed rows"
+)
 curves <- rows %>%
   pivot_longer(all_of(names(panels)), names_to = "panel",
                values_to = "error") %>%
@@ -114,13 +147,13 @@ figure <- ggplot(curves, aes(n, mean, color = mechanism, shape = mechanism)) +
   scale_color_manual(values = strength_colors) +
   scale_shape_manual(values = c(16, 17, 15, 18)) +
   scale_x_continuous(breaks = sort(unique(curves$n))) +
-  facet_wrap(~panel, scales = "free_y") +
+  facet_wrap(~panel, scales = "free_y", ncol = 4) +
   labs(x = "Number of rows (n)", y = "RRMSE", color = legend_title,
        shape = legend_title) +
   theme_significance() +
   theme(legend.position = "top", legend.justification = "left",
-        strip.text = element_text(face = "bold", size = 11))
+        strip.text = element_text(face = "bold", size = 10))
 
 dir.create(file.path(out_dir, "paper"), showWarnings = FALSE)
 ggsave(file.path(out_dir, "paper", "figure_sens_missingness.pdf"), figure,
-       device = cairo_pdf, width = 10, height = 4.5, units = "in")
+       device = cairo_pdf, width = 14, height = 13, units = "in")

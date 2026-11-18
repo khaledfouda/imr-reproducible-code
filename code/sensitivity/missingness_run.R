@@ -1,13 +1,16 @@
 # Sensitivity analysis, missingness mechanism: run the simulations.
 #
 # One replication:
-#   1. a complete data set with n_max rows, theta = X beta + A B' and
-#      Y = theta + noise, where X'A = 0 on the n_max rows;
+#   1. a complete data set with n_max rows, theta = X beta + Gamma Z' + A B'
+#      and Y = theta + noise, where conditions (C1)-(C3) hold on the n_max
+#      rows;
 #   2. four masks on it, MCAR and three MAR mechanisms of increasing
-#      strength, all drawn from the same uniforms;
-#   3. for each mask and each n, a tuned fit on the first n rows.
+#      strength driven by X, all drawn from the same uniforms;
+#   3. for each mask and each n, a fit on the first n rows, with lambda_m
+#      tuned and lambda_beta = lambda_gamma = 0.
 # The fits of a replication share everything except the mask and n. The
-# error of the fitted matrix is always measured on the first min(n) rows.
+# errors of the fitted matrix and of Gamma are always measured on the first
+# min(n) rows.
 #
 # Run from the root of the simulation repository, in a terminal, with one
 # BLAS thread per worker:
@@ -33,10 +36,9 @@ source("./code/sensitivity/runner.R")
 # Settings ----
 cfg <- list(
   n = c(200, 400, 600, 800, 1000),  # numbers of rows; the fits are nested
-  m = 400, p = 4, r = 4, snr = 3,
+  m = 400, p = 4, q = 4, r = 4, snr = 3,   # q = p
   rate = 0.3,                   # mean probability that an entry is observed
   kappa = c(0, 0.5, 0.75, 1),   # strength of the mechanism; 0 is MCAR
-  beta_grid = c(0, NA, 20),     # lambda_beta: min, max (NA: automatic), length
   val_prop = 0.2, thresh = 1e-6, maxit = 2000,
   reps = 500, n_workers = 8,
   out_dir = "./output/sensitivity"
@@ -45,7 +47,6 @@ if (size == "draft") cfg$reps <- 27
 if (size == "lite") {
   cfg$n <- c(100, 200, 300)
   cfg$m <- 200
-  cfg$beta_grid <- c(0, NA, 4)
   cfg$reps <- 2
   cfg$n_workers <- 2
   cfg$out_dir <- "./output/sensitivity_lite"
@@ -60,19 +61,21 @@ rel_err <- function(a, b) {
 }
 
 # Data ----
-# The complete data set of a replication: X, beta, theta and Y with n_max
-# rows, the uniforms behind every mask, and the probability that an entry of
-# each row is observed (one column per kappa).
+# The complete data set of a replication: X, Z, beta, Gamma, theta and Y
+# with n_max rows, the uniforms behind every mask, the MAR score of each
+# row, and the probability that an entry of the row is observed (one column
+# per kappa).
 make_data <- function(seed, cfg) {
   n_max <- max(cfg$n)
-  # centered: each column of X has mean zero on the n_max rows.
-  # identified: A is orthogonal to X on the n_max rows, condition (C1).
-  # On the first n < n_max rows, both hold only approximately.
+  # centered: each column of X and of Z has mean zero (X on the n_max rows).
+  # identified: conditions (C1)-(C3), X'A = 0, Z'B = 0 and X'Gamma = 0, hold
+  # on the n_max rows. On the first n < n_max rows, the centering of X and
+  # the two conditions that involve X hold only approximately.
   d <- generate_simulated_data(
-    n = n_max, m = cfg$m, r = cfg$r, p = cfg$p, q = 0, seed = seed,
+    n = n_max, m = cfg$m, r = cfg$r, p = cfg$p, q = cfg$q, seed = seed,
     centered = TRUE, identified = TRUE
   )
-  theta <- d$theta   # X beta + A B'
+  theta <- d$theta   # X beta + Gamma Z' + A B'
 
   # noise, direction of the MAR score and uniforms, with a seed of their own
   set.seed(1e6 + seed)
@@ -94,8 +97,8 @@ make_data <- function(seed, cfg) {
   }, numeric(n_max))
 
   return(list(
-    X = d$X, beta = d$beta, theta = theta, Y = theta + noise,
-    u = u, prob = prob
+    X = d$X, Z = d$Z, beta = d$beta, gamma = d$gamma, theta = theta,
+    Y = theta + noise, u = u, prob = prob, score = score
   ))
 }
 
@@ -109,49 +112,77 @@ fit_cell <- function(d, n, k, seed, cfg) {
   # the first n rows of the mask of the complete data set (TRUE = observed),
   # so the masks of the different sizes are nested
   mask <- d$u[rows, ] < d$prob[rows, k]
+  # the identified truth of these rows, T(theta): beta = (X'X)^{-1} X' theta
+  # and Gamma = Px_perp theta Z (Z'Z)^{-1}. They are the generated beta and
+  # Gamma when X'A = 0 and X'Gamma = 0 on these rows, as at n = n_max.
+  qx <- qr(x_mat)
+  beta_t <- qr.coef(qx, d$theta[rows, ])
+  gamma_t <- t(qr.coef(qr(d$Z), t(qr.resid(qx, d$theta[rows, ]))))
   cell <- data.frame(
     seed = seed, n = n, kappa = cfg$kappa[k],
     pi_ratio = max(d$prob[rows, k]) / min(d$prob[rows, k]),
     obs_rate = mean(mask),
     min_row_obs = min(rowSums(mask)), min_col_obs = min(colSums(mask)),
-    # distance between beta and the identified truth of these rows,
-    # (X'X)^{-1} X' theta: zero when X'A = 0 on them, as at n = n_max
-    beta_gap = rel_err(qr.coef(qr(x_mat), d$theta[rows, ]), d$beta)
+    # their distances to the generated beta and Gamma (Gamma: test rows)
+    beta_gap = rel_err(beta_t, d$beta),
+    gamma_gap = rel_err(gamma_t[test, ], d$gamma[test, ])
   )
   # imr() needs two observed entries in every row and column
   if (min(cell$min_row_obs, cell$min_col_obs) < 2) {
     return(cbind(cell, status = "skipped"))
   }
 
-  # lambda_beta and lambda_m are tuned on a validation set; the rank is fixed
+  # lambda_m is tuned on a validation set. The rank is fixed, and beta and
+  # Gamma are dense: lambda_beta = lambda_gamma = 0.
   start <- Sys.time()
   out <- suppressMessages(imr(
-    d$Y[rows, ] * mask, x_mat,
+    d$Y[rows, ] * mask, x_mat, d$Z,
     center = FALSE, scale = TRUE, val_prop = cfg$val_prop,
-    grid = imr_tune_grid(beta = cfg$beta_grid, rank = cfg$r),
+    grid = imr_tune_grid(beta = 0, gamma = 0, rank = cfg$r),
     maxit = cfg$maxit, thresh = cfg$thresh,
     n_cores = 1, seed = seed, verbose = 0
   ))
   secs <- as.numeric(Sys.time() - start, units = "secs")
 
-  # raw estimates, and identified ones: beta tilde = (X'X)^{-1} X' theta hat
+  # raw estimates, and identified ones: T(theta hat)
   raw <- reconstruct(out$fit, out$data, trace = FALSE)
   id <- reconstruct(imr_identify(out$fit, out$data), out$data, trace = FALSE)
 
   err2 <- (raw$estimates[test, ] - d$theta[test, ])^2
   theta2 <- d$theta[test, ]^2
   unobs <- !mask[test, ]
+  # the tenths of the test rows with the smallest and the largest score: the
+  # rows that the MAR mechanisms observe least and most
+  score_rank <- rank(d$score[test])
+  tenth <- length(test) / 10
+  low <- which(score_rank <= tenth)
+  high <- which(score_rank > length(test) - tenth)
   return(cbind(
     cell, status = "ok",
-    # fitted matrix on the test rows: all entries, and the unobserved ones
+    # fitted matrix on the test rows: all entries, the unobserved ones, and
+    # all entries of the least and of the most observed rows
     theta_all = sqrt(sum(err2) / sum(theta2)),
     theta_unobs = sqrt(sum(err2[unobs]) / sum(theta2[unobs])),
-    # raw and identified coefficients against the true beta, and each other
+    theta_low = sqrt(sum(err2[low, ]) / sum(theta2[low, ])),
+    theta_high = sqrt(sum(err2[high, ]) / sum(theta2[high, ])),
+    # raw and identified beta against the identified truth of these rows,
+    # and against the generated beta
+    beta_raw_t = rel_err(raw$beta, beta_t),
+    beta_id_t = rel_err(id$beta, beta_t),
     beta_raw = rel_err(raw$beta, d$beta),
     beta_id = rel_err(id$beta, d$beta),
+    # the same for Gamma, on the test rows
+    gamma_raw_t = rel_err(raw$gamma[test, ], gamma_t[test, ]),
+    gamma_id_t = rel_err(id$gamma[test, ], gamma_t[test, ]),
+    gamma_raw = rel_err(raw$gamma[test, ], d$gamma[test, ]),
+    gamma_id = rel_err(id$gamma[test, ], d$gamma[test, ]),
+    # raw Gamma on the least and on the most observed rows, against the
+    # identified truth
+    gamma_low = rel_err(raw$gamma[low, ], gamma_t[low, ]),
+    gamma_high = rel_err(raw$gamma[high, ], gamma_t[high, ]),
+    # raw against identified estimates
     beta_raw_id = rel_err(raw$beta, id$beta),
-    lambda_beta = out$fit$meta$lambdas[["beta"]],
-    lambda_beta_max = out$grid$beta$max,
+    gamma_raw_id = rel_err(raw$gamma[test, ], id$gamma[test, ]),
     lambda_m = out$fit$meta$lambdas[["M"]],
     rank_fit = sum(out$fit$coefficients$d > 0),
     n_iter = out$fit$meta$n_iter, converged = out$fit$meta$converged,
