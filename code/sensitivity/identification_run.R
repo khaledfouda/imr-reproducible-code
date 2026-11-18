@@ -32,18 +32,8 @@ if (is.na(size)) size <- "lite"
 stopifnot(size %in% c("lite", "draft", "full"))
 
 # Setup ----
-# The development version of IMR: the package root is two folders up.
-# Replace this line by library(IMR) once that version is installed.
-pkgload::load_all("../..", quiet = TRUE)
-
-# generate_simulated_data() is defined in code/simulation/helper.R, which
-# also attaches the plotting packages. Only the function is evaluated here.
-for (e in parse("./code/simulation/helper.R")) {
-  is_generator <- is.call(e) && identical(e[[1]], as.name("<-")) &&
-    identical(e[[2]], as.name("generate_simulated_data"))
-  if (is_generator) eval(e)
-}
-
+library(IMR)
+source("./code/simulation/simulation_function.R")
 # run_tasks(): parallel workers, one result file per task
 source("./code/sensitivity/runner.R")
 
