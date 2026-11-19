@@ -10,8 +10,8 @@
 #   3. for each mask and each n, a fit on the first n rows, with lambda_m
 #      tuned and lambda_beta = lambda_gamma = 0.
 # The fits of a replication share everything except the mask and n. The
-# errors of the fitted matrix and of Gamma are always measured on the first
-# min(n) rows.
+# errors of the fitted matrix and of Gamma are measured on the first min(n)
+# rows; those of Gamma are also saved on all the rows of the fit.
 #
 # Run from the root of the simulation repository, in a terminal, with one
 # BLAS thread per worker:
@@ -145,12 +145,14 @@ fit_cell <- function(d, n, k, seed, cfg) {
 
   # lambda_m is tuned on a validation set. The rank is fixed, and beta and
   # Gamma are dense: lambda_beta = lambda_gamma = 0.
+  # fast_nuclear = FALSE: the grid of lambda_m goes from its largest value
+  # down to 1e-4 times that value.
   start <- Sys.time()
   out <- suppressMessages(imr(
     d$Y[rows, ] * mask, x_mat, d$Z,
     center = FALSE, scale = TRUE, val_prop = cfg$val_prop,
     grid = imr_tune_grid(beta = 0, gamma = 0, rank = cfg$r),
-    maxit = cfg$maxit, thresh = cfg$thresh,
+    maxit = cfg$maxit, thresh = cfg$thresh, fast_nuclear = FALSE,
     n_cores = 1, seed = seed, verbose = 0
   ))
   secs <- as.numeric(Sys.time() - start, units = "secs")
@@ -187,6 +189,10 @@ fit_cell <- function(d, n, k, seed, cfg) {
     gamma_id_t = rel_err(id$gamma[test, ], gamma_t[test, ]),
     gamma_raw = rel_err(raw$gamma[test, ], d$gamma[test, ]),
     gamma_id = rel_err(id$gamma[test, ], d$gamma[test, ]),
+    # raw and identified Gamma on all the rows of the fit, against the
+    # generated Gamma
+    gamma_raw_full = rel_err(raw$gamma, d$gamma[rows, ]),
+    gamma_id_full = rel_err(id$gamma, d$gamma[rows, ]),
     # raw Gamma on the least and on the most observed rows, against the
     # identified truth
     gamma_low = rel_err(raw$gamma[low, ], gamma_t[low, ]),

@@ -143,12 +143,47 @@ show("M: mean (SE)",
 # (half of the true ones are). *_zeros_found: share of the true zeros
 # estimated as zero. *_nonzeros_kept: share of the true non-zeros estimated
 # as non-zero.
-show("Zeros of the raw estimates: means",
+show("Exact zeros of the raw estimates, whole matrices: means",
      by_cell %>% summarise(
        across(c(beta_zeros, beta_zeros_found, beta_nonzeros_kept,
                 gamma_zeros, gamma_zeros_found, gamma_nonzeros_kept), mean),
        .groups = "drop"
      ))
+
+# Negligible instead of exactly zero: an estimate is negligible when its
+# absolute value is at most near_zero, in the units of the coefficients.
+# Why 0.05 is negligible here: a covariate has a range of 1, so such a
+# coefficient moves theta by at most 0.05 over the whole range of its
+# covariate, which is 6% of the standard deviation of theta (0.83) and 6 to
+# 7% of the mean absolute value of a non-zero coefficient (0.74 for beta,
+# 0.86 for Gamma).
+# The runs keep the whole matrices through their exact zeros only, so this
+# is computed on the followed coefficients (36 for each signal). The
+# identified estimates are never exactly zero: the threshold also lets them
+# be compared with the raw ones.
+#   true zeros    : share estimated as negligible;
+#   true non-zeros: share estimated as non-negligible.
+# Shares within a signal (its followed coefficients and its replications),
+# then means over the signals.
+near_zero <- 0.05
+kind_labels <- c(zero = "True zeros\nestimated as negligible",
+                 nonzero = "True non-zeros\nestimated as non-negligible")
+near <- stack_scenarios(
+  results$coefs %>%
+    left_join(results$truth$coefs, by = c("signal", "identified", "coef")) %>%
+    pivot_longer(c(raw, id), names_to = "estimate", values_to = "value")
+) %>%
+  mutate(kind = if_else(gen == 0, "zero", "nonzero"),
+         right = (abs(value) <= near_zero) == (gen == 0)) %>%
+  group_by(scenario, level, signal, component, kind, estimate) %>%
+  summarise(share = mean(right), .groups = "drop") %>%
+  group_by(scenario, level, component, kind, estimate) %>%
+  summarise(mean = mean(share), .groups = "drop")
+
+show(sprintf("Followed coefficients, negligible (|estimate| <= %g): shares",
+             near_zero),
+     near %>%
+       pivot_wider(names_from = c(kind, estimate), values_from = mean))
 
 # Raw against identified ----
 # *_raw_id: the distance between the two estimates. c1, c2, c3: how far the
@@ -173,29 +208,36 @@ show("Checks: largest value over all fits",
      ))
 
 # Followed coefficients ----
-# As in identification_results.R: the mean and the standard deviation of
-# each followed estimate over the replications, in % of the typical size of
-# a coefficient (the root mean square of the entries of the true matrix).
+# The mean and the standard deviation of each followed estimate over the
+# replications, in the units of the coefficients: nothing is scaled.
 # `zero`: the generating value is zero.
 by_coef <- results$coefs %>%
   left_join(results$truth$coefs, by = c("signal", "identified", "coef")) %>%
   pivot_longer(c(raw, id), names_to = "estimate", values_to = "value") %>%
-  group_by(signal, snr, missing, component, coef, estimate, gen, T_theta,
-           size_gen, size_T) %>%
+  group_by(signal, snr, missing, component, coef, estimate, gen, T_theta) %>%
   summarise(mean = mean(value), sd = sd(value), .groups = "drop") %>%
   mutate(
-    error_gen = 100 * (mean - gen) / size_gen,
-    error_T = 100 * (mean - T_theta) / size_T,
-    sd = 100 * sd / size_gen,
-    truth_T = 100 * (T_theta - gen) / size_gen,
+    error_gen = mean - gen,
+    error_T = mean - T_theta,
+    truth_T = T_theta - gen,
     zero = gen == 0,
     estimate = factor(estimate, levels = c("raw", "id"),
                       labels = c("Raw", "Identified"))
   )
 
+# For the scale of the errors below: the size of the true coefficients.
+show("Followed coefficients: size of the true values",
+     results$truth$coefs %>%
+       group_by(component) %>%
+       summarise(
+         coefficients = n(), zeros = sum(gen == 0),
+         mean_abs_nonzero = mean(abs(gen[gen != 0])),
+         root_mean_square = sqrt(mean(gen^2)), .groups = "drop"
+       ))
+
 # Means over the followed coefficients of all the signals, for the true
 # zeros and for the others.
-show("Followed coefficients, in % of the typical size of a coefficient",
+show("Followed coefficients: errors in the units of the coefficients",
      stack_scenarios(by_coef) %>%
        group_by(scenario, level, component, zero, estimate) %>%
        summarise(
@@ -266,48 +308,48 @@ save_figure(error_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
             "figure_sens_ident_sparse_missing", width = 12, height = 5)
 
-# The zeros of the raw estimates against the level of a scenario: the share
-# of the true zeros estimated as zero, and the share of the true non-zeros
-# estimated as non-zero. Means over the signals.
-zero_labels <- c(zeros_found = "True zeros estimated as zero",
-                 nonzeros_kept = "True non-zeros estimated as non-zero")
-zeros <- by_signal %>%
-  pivot_longer(matches("^(beta|gamma)_(zeros_found|nonzeros_kept)$"),
-               names_to = c("component", "line"),
-               names_pattern = "^(beta|gamma)_(.*)$", values_to = "share") %>%
-  group_by(scenario, component, line, level) %>%
-  summarise(mean = mean(share), .groups = "drop") %>%
-  mutate(line = factor(line, levels = names(zero_labels),
-                       labels = zero_labels),
+# The zeros against the level of a scenario, with "negligible" in the place
+# of "exactly zero" (see `near` above): the share of the true zeros
+# estimated as negligible (top) and the share of the true non-zeros
+# estimated as non-negligible (bottom), for the raw and the identified
+# estimates, on the followed coefficients. Means over the signals. The
+# threshold is given in the caption of the figure, not on the figure.
+zeros <- near %>%
+  mutate(kind = factor(kind, levels = names(kind_labels),
+                       labels = kind_labels),
+         estimate = factor(estimate, levels = c("raw", "id"),
+                           labels = c("Raw", "Identified")),
          component = factor(component, levels = names(component_labels),
                             labels = component_labels))
 
 zeros_figure <- function(scenario_name, x_label, x_scale) {
   data <- zeros %>% filter(scenario == scenario_name)
-  figure <- ggplot(data, aes(level, mean, color = line, shape = line)) +
+  figure <- ggplot(data, aes(level, mean, color = estimate,
+                             shape = estimate)) +
     geom_line(linewidth = 1) +
     geom_point(size = 2.5) +
-    scale_color_manual(values = c(signif_blue, signif_orange)) +
-    scale_shape_manual(values = c(16, 17)) +
+    scale_color_manual(values = c(signif_red, signif_blue)) +
+    scale_shape_manual(values = c(15, 16)) +
     x_scale(breaks = sort(unique(data$level))) +
     scale_y_continuous(limits = c(0, 1)) +
-    facet_wrap(~component, nrow = 1, labeller = label_parsed) +
+    facet_grid(kind ~ component,
+               labeller = labeller(component = label_parsed)) +
     labs(x = x_label, y = "Share", color = NULL, shape = NULL) +
     theme_paper
   return(figure)
 }
 save_figure(zeros_figure("Noise", "Signal-to-noise ratio (log scale)",
                          scale_x_log10),
-            "figure_sens_ident_sparse_zeros_noise", width = 12, height = 5)
+            "figure_sens_ident_sparse_zeros_noise", width = 12, height = 7)
 save_figure(zeros_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
-            "figure_sens_ident_sparse_zeros_missing", width = 12, height = 5)
+            "figure_sens_ident_sparse_zeros_missing", width = 12, height = 7)
 
 # The followed coefficients of the first signal in the cell (snr_base,
 # missing_base). For each coefficient: the error against the generating
-# value, in % of the typical size of a coefficient, with +/- 1 standard
-# deviation over the replications. The cross is where T(theta) is. The
-# left panels hold the true zeros, the right ones the other coefficients.
+# value, in the units of the coefficients, with +/- 1 standard deviation
+# over the replications. The cross is where T(theta) is. The left panels
+# hold the true zeros, the right ones the other coefficients.
 base_coefs <- by_coef %>%
   filter(signal == cfg$signals[1], snr == cfg$snr_base,
          missing == cfg$missing_base) %>%
@@ -331,9 +373,30 @@ coef_figure <- ggplot(base_coefs, aes(position, error_gen, color = estimate,
   scale_shape_manual(values = c(15, 16)) +
   facet_grid(component ~ kind, scales = "free",
              labeller = labeller(component = label_parsed)) +
-  labs(x = "Followed coefficient",
-       y = "Estimate minus true value (% of the typical coefficient size)",
+  labs(x = "Followed coefficient", y = "Estimate minus true value",
        color = NULL, shape = NULL) +
   theme_paper
 save_figure(coef_figure, "figure_sens_ident_sparse_coefs", width = 12,
+            height = 7)
+
+# Every followed coefficient of every signal in the cell (snr_base,
+# missing_base): the error of its estimate, averaged over the replications,
+# against its true value. No coefficient is left out and nothing is scaled.
+# The true zeros are the points at 0 on the horizontal axis.
+all_coefs <- by_coef %>%
+  filter(snr == cfg$snr_base, missing == cfg$missing_base) %>%
+  mutate(component = factor(component, levels = names(component_labels),
+                            labels = component_labels))
+all_figure <- ggplot(all_coefs, aes(gen, error_gen, color = estimate,
+                                    shape = estimate)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_point(size = 1.2, alpha = 0.5) +
+  scale_color_manual(values = c(signif_red, signif_blue)) +
+  scale_shape_manual(values = c(15, 16)) +
+  facet_grid(component ~ estimate,
+             labeller = labeller(component = label_parsed)) +
+  labs(x = "True value", y = "Estimate minus true value") +
+  theme_paper +
+  theme(legend.position = "none")
+save_figure(all_figure, "figure_sens_ident_sparse_coefs_all", width = 12,
             height = 7)

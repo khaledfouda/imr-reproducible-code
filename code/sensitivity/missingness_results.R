@@ -20,6 +20,8 @@
 #   beta_raw, beta_id: the same estimates against the generated beta;
 #   gamma_raw_t, gamma_id_t, gamma_raw, gamma_id: the same four errors for
 #     Gamma, on the first rows;
+#   gamma_raw_full, gamma_id_full: the raw and the identified Gamma against
+#     the generated Gamma, on all the rows of the fit;
 #   gamma_low, gamma_high: the raw Gamma against the identified truth, on
 #     the least and on the most observed tenth of the first rows.
 library(dplyr)
@@ -90,7 +92,7 @@ error_groups <- list(
   "Fitted matrix" = c("theta_all", "theta_unobs", "theta_low", "theta_high"),
   "Beta" = c("beta_raw_t", "beta_id_t", "beta_raw", "beta_id"),
   "Gamma" = c("gamma_raw_t", "gamma_id_t", "gamma_raw", "gamma_id",
-              "gamma_low", "gamma_high")
+              "gamma_raw_full", "gamma_id_full", "gamma_low", "gamma_high")
 )
 for (group in names(error_groups)) {
   errors <- error_groups[[group]]
@@ -156,6 +158,11 @@ mechanism_colors <- c("grey35", "#4fbcd8", signif_blue, "#00485b",
                       "#f9b96b", signif_orange, "#9c5200")
 mechanism_shapes <- c(16, 17, 17, 17, 15, 15, 15)
 legend_title <- expression("Mechanism" ~ (pi[max] / pi[min]) * ":")
+# the rows on which the errors of the fitted matrix and of Gamma are measured
+figure_note <- sprintf(paste(
+  "Fitted matrix and Gamma: first %d rows, the rows common to every size.",
+  "Beta: all its entries."
+), min(curves$n))
 figure <- ggplot(curves, aes(n, mean, color = mechanism, shape = mechanism)) +
   geom_line(linewidth = 1) +
   geom_point(size = 2.5) +
@@ -164,11 +171,78 @@ figure <- ggplot(curves, aes(n, mean, color = mechanism, shape = mechanism)) +
   scale_x_continuous(breaks = sort(unique(curves$n))) +
   facet_wrap(~panel, scales = "free_y", ncol = 4) +
   labs(x = "Number of rows (n)", y = "RRMSE", color = legend_title,
-       shape = legend_title) +
+       shape = legend_title, caption = figure_note) +
   theme_significance() +
   theme(legend.position = "top", legend.justification = "left",
-        strip.text = element_text(face = "bold", size = 10))
+        strip.text = element_text(face = "bold", size = 10),
+        plot.caption = element_text(hjust = 0, size = 11))
 
 dir.create(file.path(out_dir, "paper"), showWarnings = FALSE)
 ggsave(file.path(out_dir, "paper", "figure_sens_missingness.pdf"), figure,
        device = cairo_pdf, width = 14, height = 13, units = "in")
+
+# Final figures ----
+# One figure for the mechanisms driven by X and one for those driven by X
+# and Z, each with MCAR as the baseline. Six panels: the fitted matrix on
+# the first rows (all entries, unobserved entries), then the raw and the
+# identified beta, then the raw and the identified Gamma, both against the
+# generated coefficients and on all their entries. The two panels of a row
+# share their axis, and the two figures have the same axes.
+final_panels <- c(
+  theta_all = "Fitted matrix: all entries",
+  theta_unobs = "Fitted matrix: unobserved entries",
+  beta_raw = "Raw beta",
+  beta_id = "Identified beta",
+  gamma_raw_full = "Raw Gamma",
+  gamma_id_full = "Identified Gamma"
+)
+final_curves <- rows %>%
+  pivot_longer(all_of(names(final_panels)), names_to = "panel",
+               values_to = "error") %>%
+  group_by(panel, mechanism, n) %>%
+  summarise(mean = mean(error), .groups = "drop") %>%
+  mutate(
+    # the row of the panel: "theta", "beta" or "gamma"
+    pair = sub("_.*", "", panel),
+    panel = factor(panel, levels = names(final_panels), labels = final_panels)
+  )
+# the smallest and the largest mean of each row of panels, over the seven
+# mechanisms: drawn as invisible points, they set the axes
+final_ranges <- final_curves %>% group_by(pair) %>%
+  mutate(low = min(mean), high = max(mean)) %>% ungroup() %>%
+  distinct(panel, low, high) %>%
+  pivot_longer(c(low, high), values_to = "mean") %>%
+  mutate(n = min(final_curves$n))
+final_note <- sprintf(paste(
+  "Fitted matrix: first %d rows, the rows common to every size.",
+  "Beta and Gamma: all their entries,\nagainst the generated coefficients."
+), min(final_curves$n))
+
+# The figure of one family: MCAR and the three mechanisms at the positions
+# `cases` among the seven.
+final_figure <- function(cases) {
+  keep <- final_curves %>%
+    filter(as.integer(mechanism) %in% c(1, cases)) %>%
+    mutate(mechanism = droplevels(mechanism))
+  ggplot(keep, aes(n, mean)) +
+    geom_blank(data = final_ranges) +
+    geom_line(aes(color = mechanism), linewidth = 1) +
+    geom_point(aes(color = mechanism, shape = mechanism), size = 2.5) +
+    scale_color_manual(values = mechanism_colors[c(1, cases)]) +
+    scale_shape_manual(values = mechanism_shapes[c(1, cases)]) +
+    scale_x_continuous(breaks = sort(unique(final_curves$n))) +
+    facet_wrap(~panel, scales = "free_y", ncol = 2) +
+    labs(x = "Number of rows (n)", y = "RRMSE", color = legend_title,
+         shape = legend_title, caption = final_note) +
+    theme_significance() +
+    theme(legend.position = "top", legend.justification = "left",
+          strip.text = element_text(face = "bold", size = 10),
+          plot.caption = element_text(hjust = 0, size = 10,
+                                      margin = margin(t = 12)))
+}
+ggsave(file.path(out_dir, "paper", "figure_sens_missingness_x.pdf"),
+       final_figure(2:4), device = cairo_pdf, width = 8, height = 10,
+       units = "in")
+ggsave(file.path(out_dir, "paper", "figure_sens_missingness_xz.pdf"),
+       final_figure(5:7), device = cairo_pdf, width = 8, height = 10,
+       units = "in")

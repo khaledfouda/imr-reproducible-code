@@ -158,31 +158,37 @@ show("Checks: largest value over all fits",
 # Followed coefficients ----
 # For each followed coefficient of each signal, in each cell and for each
 # estimate: the mean and the standard deviation of the estimate over the
-# replications, in % of the typical size of a coefficient. That size is the
-# root mean square of the entries of the true matrix (size_gen for the
-# generating one, size_T for the one in T(theta)), so the RRMSE is the root
-# mean square of such errors over all the coefficients of the matrix.
-#   error_gen: 100 * (mean estimate - generating value) / size_gen;
-#   error_T  : 100 * (mean estimate - value in T(theta)) / size_T;
-#   sd       : 100 * sd(estimate) / size_gen;
-#   truth_T  : where T(theta) is, 100 * (T - gen) / size_gen.
+# replications, in the units of the coefficients (nothing is scaled).
+#   error_gen: mean estimate - generating value;
+#   error_T  : mean estimate - value in T(theta);
+#   sd       : sd(estimate);
+#   truth_T  : where T(theta) is, T - gen.
 by_coef <- results$coefs %>%
   left_join(results$truth$coefs, by = c("signal", "identified", "coef")) %>%
   pivot_longer(c(raw, id), names_to = "estimate", values_to = "value") %>%
   group_by(signal, identified, snr, missing, component, coef, estimate, gen,
-           T_theta, size_gen, size_T) %>%
+           T_theta) %>%
   summarise(mean = mean(value), sd = sd(value), .groups = "drop") %>%
   mutate(
-    error_gen = 100 * (mean - gen) / size_gen,
-    error_T = 100 * (mean - T_theta) / size_T,
-    sd = 100 * sd / size_gen,
-    truth_T = 100 * (T_theta - gen) / size_gen,
+    error_gen = mean - gen,
+    error_T = mean - T_theta,
+    truth_T = T_theta - gen,
     estimate = factor(estimate, levels = c("raw", "id"),
                       labels = c("Raw", "Identified"))
   )
 
+# For the scale of the errors below: the size of the true coefficients.
+show("Followed coefficients: size of the true values",
+     results$truth$coefs %>%
+       mutate(truth = label_truth(identified)) %>%
+       group_by(truth, component) %>%
+       summarise(
+         coefficients = n(), mean_abs = mean(abs(gen)),
+         root_mean_square = sqrt(mean(gen^2)), .groups = "drop"
+       ))
+
 # Means over the followed coefficients of all the signals.
-show("Followed coefficients, in % of the typical size of a coefficient",
+show("Followed coefficients: errors in the units of the coefficients",
      stack_scenarios(by_coef) %>%
        group_by(scenario, truth, level, component, estimate) %>%
        summarise(
@@ -259,9 +265,9 @@ save_figure(error_figure("Missingness", "Missing entries (%)",
 
 # The followed coefficients of the first signal in the cell (snr_base,
 # missing_base). For each coefficient: the error against the generating
-# value, in % of the typical size of a coefficient, with +/- 1 standard
-# deviation over the replications. The cross is where T(theta) is: at zero
-# when the truth satisfies the conditions.
+# value, in the units of the coefficients, with +/- 1 standard deviation
+# over the replications. The cross is where T(theta) is: at zero when the
+# truth satisfies the conditions.
 base_coefs <- by_coef %>%
   filter(signal == cfg$signals[1], snr == cfg$snr_base,
          missing == cfg$missing_base) %>%
@@ -283,8 +289,29 @@ coef_figure <- ggplot(base_coefs, aes(position, error_gen, color = estimate,
   scale_shape_manual(values = c(15, 16)) +
   facet_grid(component ~ truth, scales = "free_y",
              labeller = labeller(component = label_parsed)) +
-  labs(x = "Followed coefficient",
-       y = "Estimate minus true value (% of the typical coefficient size)",
+  labs(x = "Followed coefficient", y = "Estimate minus true value",
        color = NULL, shape = NULL) +
   theme_paper
 save_figure(coef_figure, "figure_sens_ident_coefs", width = 12, height = 7)
+
+# Every followed coefficient of every signal in the cell (snr_base,
+# missing_base): the error of its estimate, averaged over the replications,
+# against its true value. No coefficient is left out and nothing is scaled.
+all_coefs <- by_coef %>%
+  filter(snr == cfg$snr_base, missing == cfg$missing_base) %>%
+  mutate(truth = label_truth(identified),
+         component = factor(component, levels = c("beta", "gamma"),
+                            labels = c("beta", "Gamma")))
+all_figure <- ggplot(all_coefs, aes(gen, error_gen, color = estimate,
+                                    shape = estimate)) +
+  geom_hline(yintercept = 0, linewidth = 0.3) +
+  geom_point(size = 1.2, alpha = 0.5) +
+  scale_color_manual(values = c(signif_red, signif_blue)) +
+  scale_shape_manual(values = c(15, 16)) +
+  facet_grid(component ~ truth + estimate,
+             labeller = labeller(component = label_parsed)) +
+  labs(x = "True value", y = "Estimate minus true value") +
+  theme_paper +
+  theme(legend.position = "none")
+save_figure(all_figure, "figure_sens_ident_coefs_all", width = 12,
+            height = 7)
