@@ -1,0 +1,567 @@
+---
+title: "Sensitivity analyses: settings, figures and tables"
+date: today
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    number-sections: true
+    code-fold: true
+    code-summary: "."
+    embed-resources: true
+    fig-dpi: 100
+    grid:
+      body-width: 1000px
+execute:
+  message: false
+  warning: false
+knitr:
+  opts_chunk:
+    dev: ragg_png
+editor: 
+  markdown: 
+    wrap: 80
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+#| label: setup
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(knitr)
+
+# root of the simulation repository, relative to this file
+repo <- normalizePath("/home/rstudio/mac/IMR/article/imr-reproducible-code")
+read_results <- function(part) {
+  readRDS(file.path(repo, "output/sensitivity",
+                    paste0("results_", part, ".rds")))
+}
+
+# Run a results script of code/sensitivity/ from the root of the simulation
+# repository, in an environment of its own. Returns that environment: the
+# objects of the script, and its figures in `figures`, named after their
+# files. The script writes nothing and its printed tables are dropped.
+run_script <- function(file) {
+  withr::local_options(list(width = getOption("width")))
+  env <- new.env(parent = globalenv())
+  env$figures <- list()
+  env$ggsave <- function(filename, plot, ...) {
+    env$figures[[sub("\\.pdf$", "", basename(filename))]] <- plot
+  }
+  env$dir.create <- function(...) invisible(FALSE)
+  env$commandArgs <- function(...) character(0)   # the full-size results
+  withr::with_dir(repo, utils::capture.output(
+    sys.source(file.path("code/sensitivity", file), envir = env)
+  ))
+  return(env)
+}
+
+miss <- run_script("missingness_results.R")
+ident <- run_script("identification_results.R")
+sparse <- run_script("identification_sparse_results.R")
+old <- run_script("4_plots.R")   # initialization and sources of variability
+
+# RSSthemes draws the text of the figures with showtext, which assumes 96 dpi
+# on a bitmap device: give it the resolution of the figures of this document.
+#showtext::showtext_opts(
+#  dpi = opts_chunk$get("dpi") * opts_chunk$get("fig.retina")
+#)
+
+# "mean (standard deviation)" of a column, as text
+mean_sd <- function(x, digits = 4) {
+  return(sprintf("%.*f (%.*f)", digits, mean(x), digits, sd(x)))
+}
+
+# the cell of a scenario of the identification runs, as a label
+cell_label <- function(scenario, level) {
+  return(if_else(scenario == "Noise", paste("SNR", level),
+                 paste0(level, "% missing")))
+}
+```
+
+# general setting
+
+- **Model**
+  - $\Theta^\star=X\beta^\star+\Gamma^\star Z^\top+M^\star$, $M^\star=AB^\top$,
+  - $Y_{ij}=\Theta^\star_{ij}+\varepsilon_{ij}$
+  - $\varepsilon_{ij}\sim N(0,\sigma^2)$ and
+    $\sigma=\operatorname{sd}(\Theta^\star)/\mathrm{SNR}$.
+  - $m=600$, $p=q=3$, $r=4$.
+- **Identification Conditions**: (C1) $X^\top M=0$, (C2) $MZ=0$, (C3)
+  $X^\top\Gamma=0$.
+  - $T(\Theta)$ is the decomposition of $\Theta$ that satisfies them.
+- **Estimates**:
+  - $\hat\beta$, $\hat\Gamma$ are returned by the algorithm;
+  - $\tilde\beta$, $\tilde\Gamma$ identified estimates using $\hat\Theta$.
+- **Error**:
+  $\mathrm{RRMSE}=\|\text{estimate}-\text{target}\|_F/\|\text{target}\|_F$.
+- Rank is given. thresh = $1e-6$ , maxit = $2000$, $scale=TRUE$, $center=FALSE$,
+- $\lambda_m$ is tuned for all.
+
+|   | Missingness | Identified, dense | Identified, sparse | Initialization |
+|----------------|----------------|----------------|----------------|----------------|
+| $n$ | 200 to 1000 | 600 | 600 | 600 |
+| Missing | 70% | 30%; 10% to 90% | 30%; 10% to 90% | 70% |
+| SNR | 3 | 0.5 to 10; 3 | 0.5 to 10; 3 | 3 |
+| Mechanism | MCAR, MAR(X), MAR(XZ) | MCAR | MCAR | MCAR |
+| $X$, $Z$ | centered | centered | centered | not centered |
+| Truth | (C1)–(C3) hold | both versions | don't hold, half coefficients zeros | don't hold |
+| Rank | fixed at 4 | fixed at 4 | fixed at 4 | tuned |
+| $\lambda_\beta$, $\lambda_\Gamma$ | 0 | 0 | tuned | 0 |
+| $\lambda_M$ path | slow | fast | fast | fast |
+
+# Missingness mechanism
+
+- One dataset $1000\times600$ per replication and (C1)–(C3) hold; the fits use
+  its first $n\in\{200,400,600,800,1000\}$ rows.
+- Seven masks from the same uniforms, with mean observation rate 0.3:
+  - $\operatorname{logit}\pi_{ij}=\alpha_0+\kappa_xs_i+\kappa_zt_j$,
+  - where $s_i$ and $t_j$ are the standardized $X$ and $Z$ times random unit
+    vectors.
+  - MCAR: $\kappa_x=\kappa_z=0$.
+  - MAR(X): $\kappa_x\in\{0.5,0.75,1\}$, $\kappa_z=0$.
+  - MAR(XZ): $\kappa_x=\kappa_z\in\{0.25,0.5,0.75\}$.
+- 1000 replications $\times$ 7 mechanisms $\times$ 5 sizes. The number in the
+  name is $\pi_{\max}/\pi_{\min}$.
+
+## Tables
+
+::: panel-tabset
+### Mechanisms
+
+```{r}
+#| label: tbl-miss-mechanisms
+#| tbl-cap: ""
+miss$mechanisms %>%
+  transmute(
+    Mechanism = mechanism, `$\\kappa_x$` = kappa_x, `$\\kappa_z$` = kappa_z,
+    `$\\pi_{\\max}/\\pi_{\\min}$` = pi_ratio,
+    `Observed rate` = sprintf("%.3f", obs_rate),
+    `Fewest in a row` = fewest_in_a_row,
+    `Fewest in a column` = fewest_in_a_column, Replications = 1000
+  ) %>%
+  kable(digits = c(0, 2, 2, 1, 0, 0, 0, 0), align = "lrrrrrrr")
+```
+
+:::
+
+::: panel-tabset
+
+### $\hat\Theta$, unobserved entries
+
+```{r}
+#| label: tbl-miss-theta
+#| tbl-cap: "RRMSE of unobserved (test) $\\hat\\Theta$, mean (sd), (change of the mean from MCAR)."
+# Error by mechanism and n: mean (standard deviation) over the replications,
+# then the change of the mean from MCAR at the same n, in %. Every
+# replication has its seven mechanisms, so this change is the mean paired
+# difference over the MCAR mean.
+miss_table <- function(error) {
+  miss$rows %>%
+    group_by(mechanism, n) %>%
+    summarise(mean = mean(.data[[error]]), cell = mean_sd(.data[[error]]),
+              .groups = "drop") %>%
+    group_by(n) %>%
+    mutate(
+      change = 100 * (mean / mean[mechanism == "MCAR"] - 1),
+      cell = if_else(mechanism == "MCAR", cell,
+                     sprintf("%s (%+.1f%%)", cell, change))
+    ) %>%
+    ungroup() %>%
+    select(Mechanism = mechanism, n, cell) %>%
+    pivot_wider(names_from = n, values_from = cell, names_glue = "$n={n}$")
+}
+kable(miss_table("theta_unobs_full"))
+```
+
+### $\hat\beta$
+
+```{r}
+#| label: tbl-miss-beta
+#| tbl-cap: " RRMSE of $\\hat\\beta$, mean (sd) (change of the mean from MCAR)."
+kable(miss_table("beta_raw"))
+```
+
+### $\hat\Gamma$
+
+```{r}
+#| label: tbl-miss-gamma
+#| tbl-cap: "RRMSE of $\\hat\\Gamma$, mean (sd) (change of the mean from MCAR)."
+kable(miss_table("gamma_raw_full"))
+```
+
+:::
+
+## Figures in the paper
+
+::: panel-tabset
+### MAR(X)
+
+```{r}
+#| label: fig-miss-paper-x
+#| fig-width: 8
+#| fig-height: 3.8
+miss$figures$figure_sens_missingness_paper_x
+```
+
+### MAR(XZ)
+
+```{r}
+#| label: fig-miss-paper-xz
+#| fig-width: 8
+#| fig-height: 3.8
+miss$figures$figure_sens_missingness_paper_xz
+```
+:::
+
+## other figures
+
+::: panel-tabset
+### MAR(X), six panels
+
+```{r}
+#| label: fig-miss-x
+#| fig-width: 8
+#| fig-height: 10
+miss$figures$figure_sens_missingness_x
+```
+
+### MAR(XZ), six panels
+
+```{r}
+#| label: fig-miss-xz
+#| fig-width: 8
+#| fig-height: 10
+miss$figures$figure_sens_missingness_xz
+```
+
+### All mechanisms, every error
+
+```{r}
+#| label: fig-miss-all
+#| fig-width: 14
+#| fig-height: 13
+miss$figures$figure_sens_missingness
+```
+:::
+
+# Identified components
+
+- $n=m=600$
+- 50 simulated datasets ($X$, $Z$, $\beta$, $\Gamma$, $A$, $B$)
+  - Noise, mask, and validation split random seed are regenerated 20 times in
+    each.
+  - two versions, one that satisfies C1-C3 and one that does not
+- Scenario 1: SNR $\in\{0.5,1,3,10\}$ at 30% missing
+- Scenario 2: $\{10,30,50,70,90\}$% missing at SNR 3.
+- 6 random columns in $\beta$ and rows in $\Gamma$ are selected randomly and
+  computed bias on them. (36 coefficients)
+
+## Tables
+
+::: panel-tabset
+### Fits
+
+```{r}
+#| label: tbl-ident-fits
+#| tbl-cap: "RRMSE of $\\hat\\Theta$"
+ident$by_cell %>%
+  summarise(
+    #Fits = sum(fits), #Converged = mean(converged),
+    Iterations = mean(n_iter), `$\\hat\\Theta$, all` = mean_sd(theta_all),
+    `$\\hat\\Theta$, unobserved` = mean_sd(theta_unobs),
+    #`$\\hat\\beta$ to $\\tilde\\beta$` = mean(beta_raw_id),
+    #`$\\hat\\Gamma$ to $\\tilde\\Gamma$` = mean(gamma_raw_id),
+    .groups = "drop"
+  ) %>%
+  mutate(Truth = truth, Cell = cell_label(scenario, level),
+         .before = 1) %>%
+  arrange(Truth) %>%
+  select(-scenario, -truth, -level) %>%
+  kable(digits = c(0, 0, 0, 2, 0, 4, 4, 3, 3))
+```
+:::
+
+::: panel-tabset
+### $\beta$
+
+```{r}
+#| label: tbl-ident-beta
+#| tbl-cap: "RRMSE of $\\beta$"
+# Errors of one component by cell, mean (standard deviation) over the
+# signals: the two estimates against the generating component and against
+# its part of T(theta).
+ident_table <- function(component, symbol) {
+  columns <- paste0(component, c("_raw_gen", "_id_gen", "_raw_T", "_id_T"))
+  headers <- c(
+    sprintf("$\\hat\\%s$ vs $\\%s^\\star$", symbol, symbol),
+    sprintf("$\\tilde\\%s$ vs $\\%s^\\star$", symbol, symbol),
+    sprintf("$\\hat\\%s$ vs $T(\\Theta^\\star)$", symbol),
+    sprintf("$\\tilde\\%s$ vs $T(\\Theta^\\star)$", symbol)
+  )
+  ident$by_cell %>%
+    summarise(across(all_of(columns), mean_sd), .groups = "drop") %>%
+    transmute(Truth = truth, Cell = cell_label(scenario, level),
+              across(all_of(columns))) %>%
+    arrange(Truth) %>%
+    rename(all_of(setNames(columns, headers)))
+}
+kable(ident_table("beta", "beta"))
+```
+
+### $\Gamma$
+
+```{r}
+#| label: tbl-ident-gamma
+#| tbl-cap: "RRMSE of $\\Gamma$"
+kable(ident_table("gamma", "Gamma"))
+```
+:::
+
+## Figures in the paper
+
+::: panel-tabset
+### SNR varies
+
+```{r}
+#| label: fig-ident-noise
+#| fig-cap: "30% missing"
+#| fig-width: 8
+#| fig-height: 6
+ident$figures$figure_sens_ident_noise
+```
+
+### Missing rate varies
+
+```{r}
+#| label: fig-ident-missing
+#| fig-cap: "SNR 3"
+#| fig-width: 8
+#| fig-height: 6
+ident$figures$figure_sens_ident_missing
+```
+
+### Individual coefficients
+
+```{r}
+#| label: fig-ident-coefs
+#| fig-cap: "SNR 3 and 30% missing; bars are $\\pm1$ standard deviation"
+#| fig-width: 8
+#| fig-height: 5.6
+ident$figures$figure_sens_ident_coefs
+```
+:::
+
+## other figure
+
+```{r}
+#| label: fig-ident-coefs-all
+#| fig-cap: "Individual coefficients at SNR 3 and 30% missing over replications"
+#| fig-width: 12
+#| fig-height: 7
+ident$figures$figure_sens_ident_coefs_all
+```
+
+# Identified components, sparse coefficients
+
+- same design as before without the conditions and with half of the entries of
+  $\beta$ and of $\Gamma$ set to zero at random.
+- $\lambda_m,\lambda_\beta$ and $\lambda_\Gamma$ are tuned
+- Negligible estimate is $|\text{estimate}|\le0.05$, for the individual
+  coefficients.
+
+## Tables
+
+::: panel-tabset
+### $\hat\Theta$
+
+```{r}
+#| label: tbl-sparse-theta
+#| tbl-cap: "RRMSE of  $\\hat\\Theta$ "
+# Errors by cell, mean (standard deviation) over the signals. `columns`
+# names the columns of the results by their headers.
+sparse_table <- function(columns) {
+  sparse$by_cell %>%
+    summarise(across(all_of(unname(columns)), mean_sd), .groups = "drop") %>%
+    mutate(Cell = cell_label(scenario, level), .before = 1) %>%
+    select(-scenario, -level) %>%
+    rename(all_of(columns))
+}
+kable(sparse_table(c(
+  `$\\hat\\Theta$` = "theta_all",
+  `$\\hat\\Theta$, no Lasso` = "theta_all_plain",
+  `$\\hat\\Theta$, unobserved` = "theta_unobs"
+)))
+```
+
+### $\beta$
+
+```{r}
+#| label: tbl-sparse-beta
+#| tbl-cap: "RRMSE for $\\beta$ "
+kable(sparse_table(c(
+  `$\\hat\\beta$` = "beta_raw_gen",
+  `$\\hat\\beta$, no Lasso` = "beta_plain_gen",
+  `$\\tilde\\beta$` = "beta_id_gen"
+)))
+```
+
+### $\Gamma$
+
+```{r}
+#| label: tbl-sparse-gamma
+#| tbl-cap: "RRMSE of $\\Gamma$ "
+kable(sparse_table(c(
+  `$\\hat\\Gamma$` = "gamma_raw_gen",
+  `$\\hat\\Gamma$, no Lasso` = "gamma_plain_gen",
+  `$\\tilde\\Gamma$` = "gamma_id_gen"
+)))
+```
+:::
+
+## Figures in the paper
+
+::: panel-tabset
+### SNR changes
+
+```{r}
+#| label: fig-sparse-noise
+#| fig-cap: " 30% missing"
+#| fig-width: 8
+#| fig-height: 4
+sparse$figures$figure_sens_ident_sparse_noise
+```
+
+### Missing rate changes
+
+```{r}
+#| label: fig-sparse-missing
+#| fig-cap: "SNR 3"
+#| fig-width: 8
+#| fig-height: 4
+sparse$figures$figure_sens_ident_sparse_missing
+```
+
+### Sparse estimates / snr changes
+
+```{r}
+#| label: fig-sparse-zeros-noise
+#| fig-width: 8
+#| fig-height: 5.6
+sparse$figures$figure_sens_ident_sparse_zeros_noise
+```
+:::
+
+## other figures
+
+::: panel-tabset
+### sparse estimates / missing rate changes
+
+```{r}
+#| label: fig-sparse-zeros-missing
+#| fig-width: 8
+#| fig-height: 5.6
+sparse$figures$figure_sens_ident_sparse_zeros_missing
+```
+
+### Individual coefficients on one dataset
+
+```{r}
+#| label: fig-sparse-coefs
+#| fig-cap: "SNR 3 and 30% missing"
+#| fig-width: 12
+#| fig-height: 7
+sparse$figures$figure_sens_ident_sparse_coefs
+```
+
+### Individual coefficients
+
+```{r}
+#| label: fig-sparse-coefs-all
+#| fig-cap: "SNR 3 and 30% missing"
+#| fig-width: 12
+#| fig-height: 7
+sparse$figures$figure_sens_ident_sparse_coefs_all
+```
+:::
+
+# Initialization
+
+- Five $600\times600$ data sets
+-  70% missing (MCAR),
+- SNR 3.
+- hyperparameters are tuned and fixed
+- 12 different warm starts
+  -  the default (`ls_initial = TRUE`)
+  -  zero matrices (`ls_initial = FALSE`)
+  - 10 random matrices
+
+## Tables
+
+::: panel-tabset
+### Iterations
+
+```{r}
+#| label: tbl-init-iterations
+#| tbl-cap: "number of Iterations by tolerance and start; fits that reach the largest number of iterations."
+old$init_rows %>%
+  group_by(Tolerance = level, Start = kind) %>%
+  summarise(Fits = n(), `Median iterations` = median(n_iter),
+            .groups = "drop") %>%
+  mutate(Tolerance = if_else(Tolerance == "short", "1e-6", "1e-12")) %>%
+  kable()
+```
+
+
+
+### Figure
+
+```{r}
+#| label: fig-init
+#| fig-cap: "Objective after each iteration for the first data set and tolerance 1e-6"
+#| fig-width: 7
+#| fig-height: 4.5
+old$figures$figure_sens_init
+```
+
+### Sources of variability
+
+
+```{r}
+#| label: tbl-sources
+#| tbl-cap: "Test RRMSE of  $\\hat\\Theta$"
+everything <- old$missing_rows %>% filter(mar_strength == 0)
+old$sources_rows %>%
+  group_by(source, seed) %>%
+  summarise(mean = mean(rrmse_unobs), variance = var(rrmse_unobs),
+            draws = n(), .groups = "drop") %>%
+  group_by(Redrawn = as.character(source)) %>%
+  summarise(`Data sets` = n(), `Draws per data set` = first(draws),
+            Mean = mean(mean), `Standard deviation` = sqrt(mean(variance)),
+            .groups = "drop") %>%
+  arrange(`Standard deviation`) %>%
+  select(-`Draws per data set`) %>%
+  # bind_rows(data.frame(
+  #   Redrawn = "Everything",
+  #   `Data sets` = nrow(everything),
+  #   `Draws per data set` = 1, Mean = mean(everything$rrmse_unobs),
+  #   `Standard deviation` = sd(everything$rrmse_unobs), check.names = FALSE
+  # )) %>%
+  kable(digits = 4)
+```
+
+### Figure
+
+```{r}
+#| label: fig-sources
+#| fig-cap: "Test RRMSE minus its mean in the data set."
+#| fig-width: 7
+#| fig-height: 4.5
+old$figures$figure_sens_sources
+```
+
+
+:::
+

@@ -198,101 +198,161 @@ show("Followed coefficients: errors in the units of the coefficients",
        ))
 
 # Figures ----
-# The theme and the colours are those of 4_plots.R.
-theme_paper <- theme_significance() +
-  theme(legend.position = "top", legend.justification = "left",
-        strip.text = element_text(face = "bold", size = 11))
-legend_rows <- guide_legend(nrow = 2, byrow = TRUE)
 dir.create(file.path(out_dir, "paper"), showWarnings = FALSE)
 save_figure <- function(figure, name, width, height) {
   ggsave(file.path(out_dir, "paper", paste0(name, ".pdf")), figure,
          device = cairo_pdf, width = width, height = height, units = "in")
 }
 
+# Figures of the paper ----
+# Three figures: the errors against the SNR, the errors against the missing
+# rate, and the followed coefficients of one signal. Their labels use the
+# symbols of the paper: the estimate that the algorithm returns is beta hat
+# (Gamma hat), the identified one is beta tilde (Gamma tilde), a true value
+# has the superscript (*), and T(Theta^(*)) holds the identified version of
+# the true coefficients. In every figure of the paper, beta hat has a solid
+# line and filled circles, and beta tilde a dashed line and open triangles.
+# The theme and the colours are those of RSSthemes, as in the other figures
+# of the paper. A figure is 8 in wide: reduced to the width of the text
+# (about 6.4 in), its smallest text is about 8 pt.
+theme_journal <- theme_significance() +
+  theme(
+    legend.position = "top", legend.justification = "left",
+    legend.box = "vertical", legend.box.just = "left",
+    legend.margin = margin(0, 0, 0, 0), legend.spacing.y = unit(1, "pt"),
+    legend.key.width = unit(2.6, "lines"),
+    legend.text = element_text(hjust = 0, size = 12),
+    strip.text = element_text(face = "bold", size = 11),
+    # beta and Gamma, upright at the right of their row of panels
+    strip.text.y = element_text(angle = 0, size = 15),
+    panel.spacing = unit(1.1, "lines")
+  )
+estimate_labels <- expression(
+  widehat(beta) * "," ~ widehat(Gamma),
+  widetilde(beta) * "," ~ widetilde(Gamma)
+)
+estimate_lines <- c("solid", "22")
+estimate_shapes <- c(16, 2)
+
 # Error on beta and on Gamma against the level of a scenario: mean and
-# +/- 1 standard deviation over the signals. One line for each estimate
-# (identified, raw) against each target (identified truth, generating
-# coefficients). With a truth that satisfies the conditions the two targets
-# are the same, so each estimate has one line there.
-line_labels <- c(
-  id_T = "Identified estimate vs. identified truth",
-  id_gen = "Identified estimate vs. generating coefficients",
-  raw_T = "Raw estimate vs. identified truth",
-  raw_gen = "Raw estimate vs. generating coefficients"
+# +/- 1 standard deviation over the signals. The line type and the shape
+# give the estimate, the colour gives what it is compared with: the true
+# coefficients or their identified version. With a truth that satisfies the
+# conditions the two are the same, and only the first is drawn.
+target_labels <- expression(
+  "the true coefficients" ~ beta^"(*)" * "," ~ Gamma^"(*)",
+  "their identified version in" ~ T(Theta^"(*)")
 )
-line_colors <- setNames(
-  c(signif_blue, signif_orange, signif_green, signif_red), line_labels
-)
-line_shapes <- setNames(c(16, 17, 18, 15), line_labels)
+# an orange and a dark blue: the two remain distinct when printed in grey
+target_colors <- c(signif_orange, "#00485b")
 curves <- by_signal %>%
   pivot_longer(matches("^(beta|gamma)_(id|raw)_(T|gen)$"),
-               names_to = c("component", "line"),
-               names_pattern = "^(beta|gamma)_(.*)$", values_to = "error") %>%
-  filter(!(identified & line %in% c("id_gen", "raw_T"))) %>%
-  group_by(scenario, truth, component, line, level) %>%
+               names_to = c("component", "estimate", "target"),
+               names_pattern = "^(beta|gamma)_(id|raw)_(T|gen)$",
+               values_to = "error") %>%
+  filter(!(identified & target == "T")) %>%
+  group_by(scenario, truth, component, estimate, target, level) %>%
   summarise(mean = mean(error), sd = sd(error), .groups = "drop") %>%
-  mutate(line = factor(line, levels = names(line_labels),
-                       labels = line_labels),
+  mutate(estimate = factor(estimate, levels = c("raw", "id")),
+         target = factor(target, levels = c("gen", "T")),
          component = factor(component, levels = c("beta", "gamma"),
                             labels = c("beta", "Gamma")))
 
 error_figure <- function(scenario_name, x_label, x_scale) {
   data <- curves %>% filter(scenario == scenario_name)
-  figure <- ggplot(data, aes(level, mean, color = line, fill = line,
-                             shape = line)) +
-    geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.15,
-                color = NA) +
-    geom_line(linewidth = 1) +
-    geom_point(size = 2.5) +
-    scale_color_manual(values = line_colors) +
-    scale_fill_manual(values = line_colors) +
-    scale_shape_manual(values = line_shapes) +
-    # the legend in two rows: the identified estimate, then the raw one
-    guides(color = legend_rows, fill = legend_rows, shape = legend_rows) +
+  figure <- ggplot(data, aes(level, mean, color = target, fill = target,
+                             linetype = estimate, shape = estimate,
+                             group = interaction(estimate, target))) +
+    geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.12,
+                color = NA, show.legend = FALSE) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2.3, stroke = 0.9) +
+    scale_color_manual(values = target_colors, labels = target_labels) +
+    scale_fill_manual(values = target_colors, guide = "none") +
+    scale_linetype_manual(values = estimate_lines, labels = estimate_labels) +
+    scale_shape_manual(values = estimate_shapes, labels = estimate_labels) +
+    # two legends, one under the other: the estimate, then the comparison
+    guides(
+      linetype = guide_legend(order = 1), shape = guide_legend(order = 1),
+      color = guide_legend(order = 2, override.aes = list(shape = NA))
+    ) +
     x_scale(breaks = sort(unique(data$level))) +
-    facet_grid(component ~ truth, scales = "free_y",
+    expand_limits(y = 0) +
+    facet_grid(component ~ truth,
                labeller = labeller(component = label_parsed)) +
-    labs(x = x_label, y = "RRMSE", color = NULL, fill = NULL, shape = NULL) +
-    theme_paper
+    labs(x = x_label, y = "RRMSE", linetype = "Estimate:",
+         shape = "Estimate:", color = "RRMSE against:") +
+    theme_journal
   return(figure)
 }
 save_figure(error_figure("Noise", "Signal-to-noise ratio (log scale)",
                          scale_x_log10),
-            "figure_sens_ident_noise", width = 12, height = 7)
+            "figure_sens_ident_noise", width = 8, height = 6)
 save_figure(error_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
-            "figure_sens_ident_missing", width = 12, height = 7)
+            "figure_sens_ident_missing", width = 8, height = 6)
 
 # The followed coefficients of the first signal in the cell (snr_base,
-# missing_base). For each coefficient: the error against the generating
+# missing_base). For each coefficient: the two estimates minus the true
 # value, in the units of the coefficients, with +/- 1 standard deviation
-# over the replications. The cross is where T(theta) is: at zero when the
-# truth satisfies the conditions.
+# over the replications. The cross is where the identified version of the
+# true coefficient is: at zero when the truth satisfies the conditions.
+# The coefficients are ordered by the height of that cross in the truth
+# that violates the conditions, in both columns of panels.
 base_coefs <- by_coef %>%
   filter(signal == cfg$signals[1], snr == cfg$snr_base,
-         missing == cfg$missing_base) %>%
+         missing == cfg$missing_base)
+coef_order <- base_coefs %>%
+  filter(!identified, estimate == "Raw") %>%
   group_by(component) %>%
-  mutate(position = coef - min(coef) + 1) %>%
+  mutate(position = rank(truth_T, ties.method = "first")) %>%
   ungroup() %>%
-  mutate(truth = label_truth(identified),
-         component = factor(component, levels = c("beta", "gamma"),
-                            labels = c("beta", "Gamma")))
-dodge <- position_dodge(width = 0.6)
-coef_figure <- ggplot(base_coefs, aes(position, error_gen, color = estimate,
-                                      shape = estimate)) +
+  select(component, coef, position)
+# one row for each mark: the two estimates (with their standard deviation)
+# and the cross
+mark_labels <- c(
+  estimate_labels,
+  expression("identified version of the true coefficient, in" ~
+               T(Theta^"(*)"))
+)
+marks <- bind_rows(
+  base_coefs %>%
+    mutate(mark = if_else(estimate == "Raw", "raw", "id"), value = error_gen),
+  base_coefs %>%
+    filter(estimate == "Raw") %>%
+    mutate(mark = "target", value = truth_T, sd = NA_real_)
+) %>%
+  left_join(coef_order, by = c("component", "coef")) %>%
+  mutate(
+    # the estimates on each side of the cross
+    x = position + c(raw = -0.22, target = 0, id = 0.22)[mark],
+    mark = factor(mark, levels = c("raw", "id", "target")),
+    truth = label_truth(identified),
+    component = factor(component, levels = c("beta", "gamma"),
+                       labels = c("beta", "Gamma"))
+  )
+coef_figure <- ggplot(marks, aes(x, value, color = mark, shape = mark)) +
   geom_hline(yintercept = 0, linewidth = 0.3) +
-  geom_point(aes(y = truth_T), color = "black", shape = 4, size = 2) +
-  geom_errorbar(aes(ymin = error_gen - sd, ymax = error_gen + sd), width = 0,
-                position = dodge) +
-  geom_point(size = 2, position = dodge) +
-  scale_color_manual(values = c(signif_red, signif_blue)) +
-  scale_shape_manual(values = c(15, 16)) +
-  facet_grid(component ~ truth, scales = "free_y",
+  geom_linerange(data = marks %>% filter(mark != "target"),
+                 aes(ymin = value - sd, ymax = value + sd), linewidth = 0.4,
+                 show.legend = FALSE) +
+  geom_point(size = 1.9, stroke = 0.8) +
+  scale_color_manual(values = c(signif_red, signif_blue, "black"),
+                     labels = mark_labels) +
+  scale_shape_manual(values = c(estimate_shapes, 4), labels = mark_labels) +
+  scale_x_continuous(breaks = seq_len(max(marks$position)), labels = NULL) +
+  facet_grid(component ~ truth,
              labeller = labeller(component = label_parsed)) +
-  labs(x = "Followed coefficient", y = "Estimate minus true value",
+  labs(x = "Coefficient", y = "Difference from the true coefficient",
        color = NULL, shape = NULL) +
-  theme_paper
-save_figure(coef_figure, "figure_sens_ident_coefs", width = 12, height = 7)
+  theme_journal +
+  theme(panel.grid.minor.x = element_blank())
+save_figure(coef_figure, "figure_sens_ident_coefs", width = 8, height = 5.6)
+
+# Diagnostic figure (not in the paper) ----
+theme_paper <- theme_significance() +
+  theme(legend.position = "top", legend.justification = "left",
+        strip.text = element_text(face = "bold", size = 11))
 
 # Every followed coefficient of every signal in the cell (snr_base,
 # missing_base): the error of its estimate, averaged over the replications,

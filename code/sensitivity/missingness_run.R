@@ -11,7 +11,8 @@
 #      tuned and lambda_beta = lambda_gamma = 0.
 # The fits of a replication share everything except the mask and n. The
 # errors of the fitted matrix and of Gamma are measured on the first min(n)
-# rows; those of Gamma are also saved on all the rows of the fit.
+# rows; the error on the unobserved entries and those of Gamma are also
+# saved on all the rows of the fit.
 #
 # Run from the root of the simulation repository, in a terminal, with one
 # BLAS thread per worker:
@@ -37,7 +38,7 @@ source("./code/sensitivity/runner.R")
 # Settings ----
 cfg <- list(
   n = c(200, 400, 600, 800, 1000),  # numbers of rows; the fits are nested
-  m = 400, p = 4, q = 4, r = 4, snr = 3,   # q = p
+  m = 600, p = 3, q = 3, r = 4, snr = 3,   # q = p
   rate = 0.3,                   # mean probability that an entry is observed
   # The mechanisms: logit(prob_ij) = a0 + kappa_x * score_i + kappa_z * score_j,
   # where score_i comes from the X of row i and score_j from the Z of column
@@ -178,6 +179,8 @@ fit_cell <- function(d, n, k, seed, cfg) {
     theta_unobs = sqrt(sum(err2[unobs]) / sum(theta2[unobs])),
     theta_low = sqrt(sum(err2[low, ]) / sum(theta2[low, ])),
     theta_high = sqrt(sum(err2[high, ]) / sum(theta2[high, ])),
+    # fitted matrix on the unobserved entries of all the rows of the fit
+    theta_unobs_full = rel_err(raw$estimates[!mask], d$theta[rows, ][!mask]),
     # raw and identified beta against the identified truth of these rows,
     # and against the generated beta
     beta_raw_t = rel_err(raw$beta, beta_t),

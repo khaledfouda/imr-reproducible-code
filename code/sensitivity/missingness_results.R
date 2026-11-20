@@ -14,6 +14,8 @@
 #   theta_low, theta_high: the same on all entries of the tenth of those
 #     rows that the MAR mechanisms observe least, and of the tenth that they
 #     observe most;
+#   theta_unobs_full: the fitted matrix on the unobserved entries of all the
+#     rows of the fit;
 #   beta_raw_t, beta_id_t: the raw and the identified estimates of beta,
 #     against the identified truth of the rows of the fit, T(theta). It is
 #     the generated beta at the largest size only;
@@ -89,7 +91,8 @@ rows <- rows %>%
 # their MCAR value in the same replication and at the same n. The SE of a
 # difference is small because the fits are paired.
 error_groups <- list(
-  "Fitted matrix" = c("theta_all", "theta_unobs", "theta_low", "theta_high"),
+  "Fitted matrix" = c("theta_all", "theta_unobs", "theta_unobs_full",
+                      "theta_low", "theta_high"),
   "Beta" = c("beta_raw_t", "beta_id_t", "beta_raw", "beta_id"),
   "Gamma" = c("gamma_raw_t", "gamma_id_t", "gamma_raw", "gamma_id",
               "gamma_raw_full", "gamma_id_full", "gamma_low", "gamma_high")
@@ -245,4 +248,78 @@ ggsave(file.path(out_dir, "paper", "figure_sens_missingness_x.pdf"),
        units = "in")
 ggsave(file.path(out_dir, "paper", "figure_sens_missingness_xz.pdf"),
        final_figure(5:7), device = cairo_pdf, width = 8, height = 10,
+       units = "in")
+
+# Figures of the paper ----
+# The figures above are for diagnosis. The paper keeps two figures, one for
+# each family of mechanisms, with MCAR as the baseline in both. Three panels:
+# the fitted matrix on the unobserved entries of all the rows of the fit,
+# then the raw beta and the raw Gamma against the generated coefficients, on
+# all their entries.
+# As in identification_results.R: the labels use the symbols of the paper
+# (the algorithm returns Theta hat, beta hat and Gamma hat), the theme and
+# the colours are those of RSSthemes, and a figure is 8 in wide: reduced to
+# the width of the text (about 6.4 in), its smallest text is about 8 pt.
+# Each panel has its own axis.
+theme_journal <- theme_significance() +
+  theme(
+    legend.position = "top", legend.justification = "left",
+    legend.margin = margin(0, 0, 0, 0),
+    # four keys and their title on one line of the 8 in
+    legend.key.width = unit(1.8, "lines"),
+    legend.title = element_text(size = 12),
+    legend.text = element_text(hjust = 0, size = 11),
+    strip.text = element_text(size = 13),
+    panel.spacing = unit(1.1, "lines")
+  )
+paper_panels <- c(
+  theta_unobs_full = "widehat(Theta)[bar(Omega)]",
+  beta_raw = "widehat(beta)",
+  gamma_raw_full = "widehat(Gamma)"
+)
+paper_curves <- rows %>%
+  pivot_longer(all_of(names(paper_panels)), names_to = "panel",
+               values_to = "error") %>%
+  group_by(panel, mechanism, n) %>%
+  summarise(mean = mean(error), .groups = "drop") %>%
+  mutate(panel = factor(panel, levels = names(paper_panels),
+                        labels = paper_panels))
+# the mechanisms as the paper names them, followed by pi_max / pi_min
+paper_labels <- with(mechanisms, case_when(
+  kappa_x == 0 ~ "MCAR",
+  kappa_z == 0 ~ sprintf("MAR(X), %.0f", pi_ratio),
+  TRUE ~ sprintf("MAR(XZ), %.0f", pi_ratio)
+))
+# MCAR is a circle; the three strengths of a family are a triangle, a square
+# and a diamond, from the weakest to the strongest (filled shapes of one size)
+paper_shapes <- c(21, 24, 22, 23)
+
+# The figure of one family: MCAR and the three mechanisms at the positions
+# `cases` among the seven.
+paper_figure <- function(cases) {
+  keep <- paper_curves %>%
+    filter(as.integer(mechanism) %in% c(1, cases)) %>%
+    mutate(mechanism = droplevels(mechanism))
+  ggplot(keep, aes(n, mean, color = mechanism, fill = mechanism,
+                   shape = mechanism)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2.4) +
+    # the same four colours in the two figures: grey and three steps of blue
+    scale_color_manual(values = mechanism_colors[1:4],
+                       labels = paper_labels[c(1, cases)]) +
+    scale_fill_manual(values = mechanism_colors[1:4],
+                      labels = paper_labels[c(1, cases)]) +
+    scale_shape_manual(values = paper_shapes,
+                       labels = paper_labels[c(1, cases)]) +
+    scale_x_continuous(breaks = sort(unique(paper_curves$n))) +
+    facet_wrap(~panel, nrow = 1, scales = "free_y", labeller = label_parsed) +
+    labs(x = expression(italic(n)), y = "RRMSE",
+         color = legend_title, fill = legend_title, shape = legend_title) +
+    theme_journal
+}
+ggsave(file.path(out_dir, "paper", "figure_sens_missingness_paper_x.pdf"),
+       paper_figure(2:4), device = cairo_pdf, width = 8, height = 3.8,
+       units = "in")
+ggsave(file.path(out_dir, "paper", "figure_sens_missingness_paper_xz.pdf"),
+       paper_figure(5:7), device = cairo_pdf, width = 8, height = 3.8,
        units = "in")

@@ -247,11 +247,6 @@ show("Followed coefficients: errors in the units of the coefficients",
        ))
 
 # Figures ----
-# The theme and the colours are those of identification_results.R.
-theme_paper <- theme_significance() +
-  theme(legend.position = "top", legend.justification = "left",
-        strip.text = element_text(face = "bold", size = 11))
-legend_rows <- guide_legend(nrow = 2, byrow = TRUE)
 dir.create(file.path(out_dir, "paper"), showWarnings = FALSE)
 save_figure <- function(figure, name, width, height) {
   ggsave(file.path(out_dir, "paper", paste0(name, ".pdf")), figure,
@@ -259,91 +254,136 @@ save_figure <- function(figure, name, width, height) {
 }
 component_labels <- c(beta = "beta", gamma = "Gamma")
 
+# Figures of the paper ----
+# Three figures: the errors against the SNR, the errors against the missing
+# rate, and the negligible estimates against the SNR. As in
+# identification_results.R, their labels use the symbols of the paper (beta
+# hat and Gamma hat for the estimate that the algorithm returns, beta tilde
+# and Gamma tilde for the identified one), beta hat has a solid line and
+# circles and beta tilde a dashed line and open triangles, the theme and the
+# colours are those of RSSthemes, and a figure is 8 in wide: reduced to the
+# width of the text (about 6.4 in), its smallest text is about 8 pt.
+theme_journal <- theme_significance() +
+  theme(
+    legend.position = "top", legend.justification = "left",
+    legend.margin = margin(0, 0, 0, 0),
+    legend.key.width = unit(2.6, "lines"),
+    legend.text = element_text(hjust = 0, size = 12),
+    strip.text = element_text(face = "bold", size = 11),
+    # beta and Gamma, upright at the right of their row of panels
+    strip.text.y = element_text(angle = 0, size = 15),
+    panel.spacing = unit(1.1, "lines")
+  )
+estimate_labels <- expression(
+  widehat(beta) * "," ~ widehat(Gamma),
+  widetilde(beta) * "," ~ widetilde(Gamma)
+)
+estimate_colors <- c(signif_red, signif_blue)
+estimate_lines <- c("solid", "22")
+estimate_shapes <- c(16, 2)
+
 # Error on beta and on Gamma against the level of a scenario: mean and
-# +/- 1 standard deviation over the signals.
+# +/- 1 standard deviation over the signals. Every line is an RRMSE against
+# the true (generating) coefficients, which are sparse: beta hat, beta tilde
+# (both from the fit with the Lasso penalties) and beta hat from the fit
+# without them. The lines are drawn in the order of `line_levels`, so that
+# beta hat is on top; the legend follows `line_order`.
+line_levels <- c("plain_gen", "id_gen", "raw_gen")
+line_order <- c("raw_gen", "id_gen", "plain_gen")
 line_labels <- c(
-  id_T = "Identified estimate vs. identified truth",
-  id_gen = "Identified estimate vs. generating coefficients",
-  raw_gen = "Raw estimate vs. generating coefficients",
-  plain_gen = "Raw estimate without Lasso vs. generating coefficients"
+  estimate_labels,
+  expression(widehat(beta) * "," ~ widehat(Gamma) ~
+               "without the Lasso penalties")
 )
-line_colors <- setNames(
-  c(signif_blue, signif_orange, signif_red, "grey40"), line_labels
-)
-line_shapes <- setNames(c(16, 17, 15, 4), line_labels)
+line_colors <- c(raw_gen = signif_red, id_gen = signif_blue,
+                 plain_gen = "grey50")
+line_types <- c(raw_gen = "solid", id_gen = "22", plain_gen = "solid")
+line_shapes <- c(raw_gen = 16, id_gen = 2, plain_gen = 1)
 curves <- by_signal %>%
-  pivot_longer(matches("^(beta|gamma)_(id_T|id_gen|raw_gen|plain_gen)$"),
+  pivot_longer(matches("^(beta|gamma)_(id_gen|raw_gen|plain_gen)$"),
                names_to = c("component", "line"),
                names_pattern = "^(beta|gamma)_(.*)$", values_to = "error") %>%
   group_by(scenario, component, line, level) %>%
   summarise(mean = mean(error), sd = sd(error), .groups = "drop") %>%
-  mutate(line = factor(line, levels = names(line_labels),
-                       labels = line_labels),
+  mutate(line = factor(line, levels = line_levels),
          component = factor(component, levels = names(component_labels),
                             labels = component_labels))
 
 error_figure <- function(scenario_name, x_label, x_scale) {
   data <- curves %>% filter(scenario == scenario_name)
   figure <- ggplot(data, aes(level, mean, color = line, fill = line,
-                             shape = line)) +
-    geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.15,
-                color = NA) +
-    geom_line(linewidth = 1) +
-    geom_point(size = 2.5) +
-    scale_color_manual(values = line_colors) +
-    scale_fill_manual(values = line_colors) +
-    scale_shape_manual(values = line_shapes) +
-    # the legend in two rows: the identified estimate, then the raw one
-    guides(color = legend_rows, fill = legend_rows, shape = legend_rows) +
+                             linetype = line, shape = line)) +
+    geom_ribbon(aes(ymin = mean - sd, ymax = mean + sd), alpha = 0.12,
+                color = NA, show.legend = FALSE) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2.3, stroke = 0.9) +
+    scale_color_manual(values = line_colors, breaks = line_order,
+                       labels = line_labels) +
+    scale_fill_manual(values = line_colors, guide = "none") +
+    scale_linetype_manual(values = line_types, breaks = line_order,
+                          labels = line_labels) +
+    scale_shape_manual(values = line_shapes, breaks = line_order,
+                       labels = line_labels) +
     x_scale(breaks = sort(unique(data$level))) +
+    expand_limits(y = 0) +
     facet_wrap(~component, nrow = 1, labeller = label_parsed) +
-    labs(x = x_label, y = "RRMSE", color = NULL, fill = NULL, shape = NULL) +
-    theme_paper
+    labs(x = x_label, y = "RRMSE", color = NULL, linetype = NULL,
+         shape = NULL) +
+    theme_journal +
+    theme(strip.text.x = element_text(size = 15))
   return(figure)
 }
 save_figure(error_figure("Noise", "Signal-to-noise ratio (log scale)",
                          scale_x_log10),
-            "figure_sens_ident_sparse_noise", width = 12, height = 5)
+            "figure_sens_ident_sparse_noise", width = 8, height = 4)
 save_figure(error_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
-            "figure_sens_ident_sparse_missing", width = 12, height = 5)
+            "figure_sens_ident_sparse_missing", width = 8, height = 4)
 
 # The zeros against the level of a scenario, with "negligible" in the place
-# of "exactly zero" (see `near` above): the share of the true zeros
-# estimated as negligible (top) and the share of the true non-zeros
-# estimated as non-negligible (bottom), for the raw and the identified
-# estimates, on the followed coefficients. Means over the signals. The
-# threshold is given in the caption of the figure, not on the figure.
+# of "exactly zero" (see `near` above): the proportion of the true zeros
+# estimated as negligible (left) and the proportion of the true non-zeros
+# estimated as non-negligible (right), for beta hat and beta tilde, on the
+# followed coefficients. Means over the signals. The threshold is given in
+# the caption of the figure, not on the figure. The figure against the SNR
+# is in the paper; the one against the missing rate is a diagnostic.
 zeros <- near %>%
   mutate(kind = factor(kind, levels = names(kind_labels),
                        labels = kind_labels),
-         estimate = factor(estimate, levels = c("raw", "id"),
-                           labels = c("Raw", "Identified")),
+         estimate = factor(estimate, levels = c("raw", "id")),
          component = factor(component, levels = names(component_labels),
                             labels = component_labels))
 
 zeros_figure <- function(scenario_name, x_label, x_scale) {
   data <- zeros %>% filter(scenario == scenario_name)
   figure <- ggplot(data, aes(level, mean, color = estimate,
-                             shape = estimate)) +
-    geom_line(linewidth = 1) +
-    geom_point(size = 2.5) +
-    scale_color_manual(values = c(signif_red, signif_blue)) +
-    scale_shape_manual(values = c(15, 16)) +
+                             linetype = estimate, shape = estimate)) +
+    geom_line(linewidth = 0.8) +
+    geom_point(size = 2.3, stroke = 0.9) +
+    scale_color_manual(values = estimate_colors, labels = estimate_labels) +
+    scale_linetype_manual(values = estimate_lines,
+                          labels = estimate_labels) +
+    scale_shape_manual(values = estimate_shapes, labels = estimate_labels) +
     x_scale(breaks = sort(unique(data$level))) +
     scale_y_continuous(limits = c(0, 1)) +
-    facet_grid(kind ~ component,
+    facet_grid(component ~ kind,
                labeller = labeller(component = label_parsed)) +
-    labs(x = x_label, y = "Share", color = NULL, shape = NULL) +
-    theme_paper
+    labs(x = x_label, y = "Proportion of coefficients", color = NULL,
+         linetype = NULL, shape = NULL) +
+    theme_journal
   return(figure)
 }
 save_figure(zeros_figure("Noise", "Signal-to-noise ratio (log scale)",
                          scale_x_log10),
-            "figure_sens_ident_sparse_zeros_noise", width = 12, height = 7)
+            "figure_sens_ident_sparse_zeros_noise", width = 8, height = 5.6)
 save_figure(zeros_figure("Missingness", "Missing entries (%)",
                          scale_x_continuous),
-            "figure_sens_ident_sparse_zeros_missing", width = 12, height = 7)
+            "figure_sens_ident_sparse_zeros_missing", width = 8, height = 5.6)
+
+# Diagnostic figures (not in the paper) ----
+theme_paper <- theme_significance() +
+  theme(legend.position = "top", legend.justification = "left",
+        strip.text = element_text(face = "bold", size = 11))
 
 # The followed coefficients of the first signal in the cell (snr_base,
 # missing_base). For each coefficient: the error against the generating
